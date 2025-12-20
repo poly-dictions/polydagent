@@ -1,0 +1,18 @@
+config.py
+posted_calls.json
+calls.db
+__pycache__/
+*.pyc
+.env
+venv/
+
+# Temp files
+*.txt
+nul
+btc_preview.txt
+recap_preview.txt
+
+# One-off post scripts (keep only agent.py and generate_call.py)
+post_xi.py
+post_nba.py
+post_btc.py
