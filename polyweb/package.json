@@ -1,0 +1,19 @@
+{
+  "name": "polyweb",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@dynamic-labs/client": "^4.0.0",
+    "@dynamic-labs/solana": "^4.52.2",
+    "@dynamic-labs/solana-extension": "^4.0.0",
+    "@dynamic-labs/web-extension": "^4.0.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>roadmap - polydictions</title>
+    <link rel="icon" type="image/png" href="../images/1.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #fb651e;
+            --text-white: #ffffff;
+            --text-muted-light: rgba(255, 255, 255, 0.7);
+            --border-light: rgba(255, 255, 255, 0.3);
+            --green: #4ADE80;
+            --yellow: #FBBF24;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--primary);
+            color: white;
+            min-height: 100vh;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        /* Navigation */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--primary);
+        }
+
+        .navbar-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text-white);
+        }
+
+        .navbar-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .navbar-link {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-white);
+            border: 1px solid var(--border-light);
+            background: transparent;
+            transition: all 0.2s;
+        }
+
+        .navbar-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .navbar-link.active {
+            background: var(--text-white);
+            color: var(--primary);
+            border-color: var(--text-white);
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .navbar-social {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid var(--border-light);
+            border-radius: 24px;
+            font-size: 14px;
+            color: var(--text-white);
+            transition: all 0.2s;
+        }
+
+        .navbar-social:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Main content */
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 24px 100px;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        /* Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .phase {
+            position: relative;
+            margin-bottom: 48px;
+        }
+
+        .phase::before {
+            content: '';
+            position: absolute;
+            left: -36px;
+            top: 8px;
+            width: 14px;
+            height: 14px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        .phase.completed::before {
+            background: var(--green);
+        }
+
+        .phase.in-progress::before {
+            background: var(--yellow);
+            box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.3);
+        }
+
+        .phase-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .phase-tag {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.7;
+        }
+
+        .phase-status {
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-weight: 600;
+        }
+
+        .status-done {
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--green);
+        }
+
+        .status-progress {
+            background: rgba(251, 191, 36, 0.2);
+            color: var(--yellow);
+        }
+
+        .status-soon {
+            background: rgba(255, 255, 255, 0.15);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .phase h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .phase ul {
+            list-style: none;
+        }
+
+        .phase li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            line-height: 1.5;
+            opacity: 0.9;
+        }
+
+        .phase li::before {
+            content: '>';
+            opacity: 0.5;
+            font-weight: 600;
+        }
+
+        .check {
+            color: var(--green);
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted-light);
+            font-size: 14px;
+            margin-top: 60px;
+        }
+
+        .footer a {
+            color: var(--text-white);
+            transition: opacity 0.2s;
+        }
+
+        .footer a:hover {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 640px) {
+            .navbar {
+                padding: 16px 24px;
+                flex-wrap: wrap;
+                gap: 16px;
+            }
+
+            .navbar-links {
+                display: none;
+            }
+
+            h1 {
+                font-size: 32px;
+                margin-bottom: 40px;
+            }
+
+            .timeline {
+                padding-left: 32px;
+            }
+
+            .phase::before {
+                left: -28px;
+            }
+
+            .phase h2 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link">home</a>
+            <a href="/markets/" class="navbar-link">markets</a>
+            <a href="/alerts/" class="navbar-link">alerts</a>
+            <a href="/whales/" class="navbar-link">whales</a>
+            <a href="/arbitrage/" class="navbar-link">arbitrage</a>
+            <a href="/roadmap/" class="navbar-link active">roadmap</a>
+        </div>
+        <div class="navbar-right">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                follow on x
+            </a>
+        </div>
+    </nav>
+
+    <main>
+        <h1>roadmap</h1>
+
+        <div class="timeline">
+            <!-- Phase 1 -->
+            <div class="phase completed">
+                <div class="phase-header">
+                    <span class="phase-tag">phase 1</span>
+                    <span class="phase-status status-done">completed</span>
+                </div>
+                <h2>foundation</h2>
+                <ul>
+                    <li>telegram bot with real-time market alerts</li>
+                    <li>telegram channel for new market notifications</li>
+                    <li>market context powered by AI</li>
+                    <li>watchlist & price alerts</li>
+                    <li>keyword filtering system</li>
+                    <li>$POLYD token launch on pump.fun</li>
+                </ul>
+            </div>
+
+            <!-- Phase 2 -->
+            <div class="phase in-progress">
+                <div class="phase-header">
+                    <span class="phase-tag">phase 2</span>
+                    <span class="phase-status status-progress">in progress</span>
+                </div>
+                <h2>expansion</h2>
+                <ul>
+                    <li>x/twitter agent with alpha calls</li>
+                    <li>chrome extension for polymarket</li>
+                    <li>landing page & documentation</li>
+                    <li>spam market filtering</li>
+                    <li>improved signal quality</li>
+                </ul>
+            </div>
+
+            <!-- Phase 3 -->
+            <div class="phase">
+                <div class="phase-header">
+                    <span class="phase-tag">phase 3</span>
+                    <span class="phase-status status-soon">upcoming</span>
+                </div>
+                <h2>community</h2>
+                <ul>
+                    <li>leaderboard for successful calls</li>
+                    <li>community predictions & discussions</li>
+                    <li>portfolio tracking integration</li>
+                    <li>discord integration</li>
+                    <li>$POLYD staking for premium access</li>
+                </ul>
+            </div>
+
+            <!-- Phase 4 -->
+            <div class="phase">
+                <div class="phase-header">
+                    <span class="phase-tag">phase 4</span>
+                    <span class="phase-status status-soon">future</span>
+                </div>
+                <h2>advanced</h2>
+                <ul>
+                    <li>AI-powered market predictions</li>
+                    <li>automated trading strategies</li>
+                    <li>premium subscription paid in $POLYD</li>
+                    <li>exclusive alpha signals for holders</li>
+                    <li>api access for $POLYD stakers</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2025 polydictions. prediction markets intelligence.</p>
+    </footer>
+</body>
+</html>

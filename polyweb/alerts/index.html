@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>new market alerts - polydictions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" type="image/png" href="/images/1.png">
+    <style>
+        /* Notification toast */
+        .toast-container {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 400px;
+        }
+
+        .toast {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            cursor: pointer;
+            transform: translateX(120%);
+            animation: slideIn 0.3s ease forwards;
+            color: var(--text-dark);
+        }
+
+        .toast:hover {
+            transform: scale(1.02);
+        }
+
+        .toast.hiding {
+            animation: slideOut 0.3s ease forwards;
+        }
+
+        @keyframes slideIn {
+            to { transform: translateX(0); }
+        }
+
+        @keyframes slideOut {
+            to { transform: translateX(120%); opacity: 0; }
+        }
+
+        .toast-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .toast-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .toast-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .toast-subtitle {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            font-size: 16px;
+        }
+
+        .toast-close:hover {
+            color: var(--text-dark);
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            margin-bottom: 24px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--green);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: var(--red);
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 14px;
+            color: var(--text-muted-light);
+        }
+
+        .status-count {
+            margin-left: auto;
+            font-size: 14px;
+            color: var(--text-white);
+            font-weight: 600;
+        }
+
+        /* Sound toggle */
+        .sound-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-white);
+            font-size: 13px;
+        }
+
+        .sound-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .sound-toggle.muted {
+            opacity: 0.5;
+        }
+
+        /* Category filters */
+        .category-section {
+            margin-bottom: 24px;
+        }
+
+        .category-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted-light);
+            margin-bottom: 12px;
+        }
+
+        .subtag-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+            padding-left: 16px;
+            display: none;
+        }
+
+        .subtag-filters.visible {
+            display: flex;
+        }
+
+        .subtag-btn {
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--text-muted-light);
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .subtag-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .subtag-btn.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+            color: var(--text-white);
+        }
+
+        /* New badge */
+        .new-badge {
+            background: var(--green);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 10px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        /* Alert card */
+        .alert-card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            color: var(--text-dark);
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .alert-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .alert-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .alert-card-badges {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .alert-card-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .alert-card-title {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.4;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+        }
+
+        .alert-card-stats {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .alert-card-stat {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .alert-card-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .alert-card-stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Empty state */
+        .waiting-state {
+            text-align: center;
+            padding: 80px 20px;
+        }
+
+        .waiting-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        .waiting-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .waiting-text {
+            color: var(--text-muted-light);
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        /* Context Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 32px;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .modal-close:hover {
+            color: var(--text-dark);
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-dark);
+            padding-right: 40px;
+        }
+
+        .modal-content {
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        .modal-loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .context-btn {
+            padding: 8px 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 12px;
+        }
+
+        .context-btn:hover {
+            background: #e55a1a;
+            transform: scale(1.02);
+        }
+
+        .alert-card-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: auto;
+            padding-top: 12px;
+        }
+
+        .alert-card-buttons .context-btn {
+            margin-top: 0;
+        }
+
+        .okbet-btn {
+            padding: 8px 14px;
+            background: white;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+
+        .okbet-btn:hover {
+            background: #f5f5f5;
+            transform: scale(1.02);
+            border-color: #ccc;
+        }
+
+        .okbet-btn img {
+            width: 16px;
+            height: 16px;
+            object-fit: contain;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .toast-container {
+                left: 16px;
+                right: 16px;
+                max-width: none;
+            }
+
+            .status-bar {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toast container for notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Context Modal -->
+    <div class="modal-overlay" id="contextModal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+            <div class="modal-title" id="modalTitle">Market Context</div>
+            <div class="modal-content" id="modalContent">
+                <div class="modal-loading">Loading context...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link">home</a>
+            <a href="/markets/" class="navbar-link">markets</a>
+            <a href="/alerts/" class="navbar-link active">alerts</a>
+            <a href="/whales/" class="navbar-link">whales</a>
+            <a href="/arbitrage/" class="navbar-link">arbitrage</a>
+            <a href="/roadmap/" class="navbar-link">roadmap</a>
+        </div>
+        <div class="navbar-right">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                follow on x
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">new market alerts</h1>
+            <p class="page-subtitle">real-time notifications for new polymarket events, showing markets from the past 3 days</p>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-dot" id="statusDot"></div>
+            <span class="status-text" id="statusText">connecting...</span>
+            <button class="sound-toggle" id="soundToggle" title="Toggle sound">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="soundIcon">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                </svg>
+                <span id="soundLabel">sound on</span>
+            </button>
+            <span class="status-count" id="alertCount">0 alerts today</span>
+        </div>
+
+        <!-- Sort Filters -->
+        <div class="category-section">
+            <div class="filters">
+                <div class="filter-group" id="sortFilters">
+                    <button class="filter-btn active" data-sort="volume">volume</button>
+                    <button class="filter-btn" data-sort="newest">newest</button>
+                    <button class="filter-btn" data-sort="ending">ending soon</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Filters -->
+        <div class="category-section">
+            <div class="category-label">filter by category</div>
+            <div class="filters">
+                <div class="filter-group" id="mainCategories">
+                    <button class="filter-btn active" data-category="all">all</button>
+                    <button class="filter-btn" data-category="politics">politics</button>
+                    <button class="filter-btn" data-category="sports">sports</button>
+                    <button class="filter-btn" data-category="crypto">crypto</button>
+                    <button class="filter-btn" data-category="finance">finance</button>
+                    <button class="filter-btn" data-category="tech">tech</button>
+                    <button class="filter-btn" data-category="culture">culture</button>
+                    <button class="filter-btn" data-category="geopolitics">geopolitics</button>
+                    <button class="filter-btn" data-category="uncategorized">uncategorized</button>
+                </div>
+            </div>
+
+            <!-- Subtag filters (shown when category is selected) -->
+            <div class="subtag-filters" id="subtagFilters"></div>
+        </div>
+
+        <!-- Alerts Grid -->
+        <div class="grid grid-3" id="alertsGrid">
+            <div class="loading-centered" style="grid-column: 1/-1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50vh; gap: 16px;">
+                <div class="spinner"></div>
+                <div style="color: var(--text-muted-light); font-size: 14px;">loading markets... this may take a moment</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2025 polydictions. prediction markets intelligence.</p>
+    </footer>
+
+    <!-- Notification sound -->
+    <audio id="notificationSound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2telegs9l9markup3FFAPJofGtUAAAA" type="audio/wav">
+    </audio>
+
+    <script src="/js/api.js"></script>
+    <script>
+        // State
+        let alerts = [];
+        let seenAlertIds = new Set();
+        let currentCategory = 'all';
+        let currentSubtag = 'all';
+        let currentSort = 'volume';
+        let soundEnabled = true;
+        let isConnected = false;
+        let pollInterval = null;
+        let alertCountToday = 0;
+
+        // Category subtags mapping
+        const SUBTAGS = {
+            politics: ['all', 'biden', 'election', 'trump', 'courts', 'senate', 'congress', 'israel', 'ukraine', 'gaza', 'us election', 'cabinet', 'venezuela', 'gov shutdown', 'h-1b', 'trade war', 'bolivia', 'epstein', 'south korea', 'romania', 'czech election', 'nyc mayor'],
+            sports: ['all', 'american football', 'basketball', 'esports', 'baseball', 'hockey', 'tennis', 'soccer', 'football', 'mma', 'golf', 'chess', 'motorsport', 'cricket', 'boxing', 'nfl', 'nba', 'nhl', 'mlb', 'f1', 'ufc', 'saudi professional league', 'games'],
+            crypto: ['all', 'ethereum', 'bitcoin', 'xrp', 'solana', 'microstrategy', 'dogecoin', 'btc', 'crypto prices', 'eth'],
+            finance: ['all', 'indices', 'equities', 'acquisitions', 'commodities', 'fed rates', 'ipos', 'prediction markets', 'business', 'stock market', 'treasuries', 'trading', 'economy'],
+            tech: ['all', 'elon musk', 'ai', 'apple', 'spacex', 'grok', 'science', 'big tech', 'openai', 'meta', 'tiktok', 'technology'],
+            culture: ['all', 'movies', 'taylor swift', 'oscars', 'youtube', 'music', 'mrbeast', 'gta vi', 'weather', 'reality tv', 'celebrities', 'pop culture', 'awards', 'entertainment'],
+            geopolitics: ['all', 'israel', 'gaza', 'venezuela', 'ukraine', 'iran', 'middle east', 'india-pakistan', 'foreign policy', 'yemen', 'south korea', 'syria', 'china', 'canada', 'turkey']
+        };
+
+        // Category keywords for classification (order matters - more specific first)
+        const CATEGORY_KEYWORDS = {
+            finance: ['stock', 'fed', 'rate cut', 'inflation', 'gdp', 'economy', 'treasury', 'dollar', 'recession', 'indices', 'equities', 'ipo', 'acquisitions', 's&p', 'nasdaq', 'dow jones', 'bank', 'reserve bank', 'central bank', 'interest rate', 'fdv', 'market cap'],
+            sports: ['nfl', 'nba', 'mlb', 'nhl', 'football', 'basketball', 'baseball', 'hockey', 'soccer', 'super bowl', 'championship', 'playoff', 'finals', 'ufc', 'mma', 'boxing', 'tennis', 'golf', 'f1', 'formula', 'olympics', 'champion', 'winner', 'counter-strike', 'cs2', 'dota', 'league of legends', 'valorant', 'esports', 'mobile legends', 'atp', 'wta', 'premier league', 'la liga', 'serie a', 'bundesliga', 'ligue 1', ' vs '],
+            crypto: ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'xrp', 'dogecoin', 'blockchain', 'defi', 'token', 'coin', 'microstrategy'],
+            politics: ['election', 'president', 'senate', 'congress', 'vote', 'trump', 'biden', 'political', 'government', 'democrat', 'republican', 'governor', 'cabinet', 'minister', 'parliament', 'primary', 'nominee', 'ballot', 'impeach'],
+            tech: ['ai', 'apple', 'google', 'meta', 'tesla', 'microsoft', 'amazon', 'software', 'spacex', 'openai', 'tiktok', 'elon musk', 'grok', 'chatgpt'],
+            culture: ['movie', 'oscar', 'grammy', 'emmy', 'celebrity', 'actor', 'music', 'album', 'box office', 'taylor swift', 'mrbeast', 'youtube', 'netflix', 'gta', 'weather', 'temperature', 'precipitation', 'earthquake', 'tsa passenger'],
+            geopolitics: ['israel', 'gaza', 'ukraine', 'russia', 'china', 'iran', 'middle east', 'military', 'invasion', 'sanctions', 'nato', 'yemen', 'syria', 'ceasefire', 'troops']
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSoundPreference();
+            setupEventListeners();
+            startPolling();
+            loadExistingAlerts();
+        });
+
+        function loadSoundPreference() {
+            const saved = localStorage.getItem('alertSoundEnabled');
+            soundEnabled = saved !== 'false';
+            updateSoundUI();
+        }
+
+        function updateSoundUI() {
+            const toggle = document.getElementById('soundToggle');
+            const label = document.getElementById('soundLabel');
+            const icon = document.getElementById('soundIcon');
+
+            if (soundEnabled) {
+                toggle.classList.remove('muted');
+                label.textContent = 'sound on';
+                icon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>';
+            } else {
+                toggle.classList.add('muted');
+                label.textContent = 'sound off';
+                icon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>';
+            }
+        }
+
+        function setupEventListeners() {
+            // Sound toggle
+            document.getElementById('soundToggle').addEventListener('click', () => {
+                soundEnabled = !soundEnabled;
+                localStorage.setItem('alertSoundEnabled', soundEnabled);
+                updateSoundUI();
+            });
+
+            // Sort filters
+            document.querySelectorAll('#sortFilters .filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#sortFilters .filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentSort = btn.dataset.sort;
+                    renderAlerts();
+                });
+            });
+
+            // Category filters
+            document.querySelectorAll('#mainCategories .filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#mainCategories .filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentCategory = btn.dataset.category;
+                    currentSubtag = 'all';
+                    updateSubtags();
+                    renderAlerts();
+                });
+            });
+        }
+
+        function updateSubtags() {
+            const container = document.getElementById('subtagFilters');
+
+            if (currentCategory === 'all' || currentCategory === 'uncategorized' || !SUBTAGS[currentCategory]) {
+                container.classList.remove('visible');
+                return;
+            }
+
+            container.classList.add('visible');
+            const subtags = SUBTAGS[currentCategory];
+
+            container.innerHTML = subtags.map(tag => `
+                <button class="subtag-btn ${tag === currentSubtag ? 'active' : ''}" data-subtag="${tag}">
+                    ${tag}
+                </button>
+            `).join('');
+
+            container.querySelectorAll('.subtag-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.subtag-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentSubtag = btn.dataset.subtag;
+                    renderAlerts();
+                });
+            });
+        }
+
+        function classifyEvent(event) {
+            const title = (event.title || '').toLowerCase();
+            const searchable = title;
+
+            for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+                for (const keyword of keywords) {
+                    if (searchable.includes(keyword.toLowerCase())) {
+                        return category;
+                    }
+                }
+            }
+
+            return 'uncategorized';
+        }
+
+        function matchesSubtag(event, subtag) {
+            if (subtag === 'all') return true;
+            const title = (event.title || '').toLowerCase();
+            return title.includes(subtag.toLowerCase());
+        }
+
+        async function loadExistingAlerts() {
+            try {
+                const response = await fetch(`${API_BASE}/api/alerts?limit=50`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.alerts) {
+                        alerts = data.alerts.map(a => ({
+                            ...a,
+                            category: classifyEvent(a),
+                            isNew: isWithinHour(a.createdAt || a.posted_at)
+                        }));
+                        alerts.forEach(a => seenAlertIds.add(a.id || a.slug));
+                        renderAlerts();
+                        updateStatus(true);
+                    }
+                }
+            } catch (e) {
+                console.error('Error loading existing alerts:', e);
+            }
+        }
+
+        function startPolling() {
+            updateStatus(false);
+
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/api/alerts?limit=20`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.alerts) {
+                            updateStatus(true);
+                            processNewAlerts(data.alerts);
+                        }
+                    } else {
+                        updateStatus(false);
+                    }
+                } catch (e) {
+                    console.error('Polling error:', e);
+                    updateStatus(false);
+                }
+            }, 10000); // Poll every 10 seconds
+        }
+
+        function processNewAlerts(newAlerts) {
+            for (const alert of newAlerts) {
+                const id = alert.id || alert.slug;
+                if (!seenAlertIds.has(id)) {
+                    seenAlertIds.add(id);
+
+                    const processedAlert = {
+                        ...alert,
+                        category: classifyEvent(alert),
+                        isNew: true
+                    };
+
+                    alerts.unshift(processedAlert);
+                    alertCountToday++;
+
+                    // Show notification
+                    showToast(processedAlert);
+
+                    // Play sound
+                    if (soundEnabled) {
+                        playNotificationSound();
+                    }
+                }
+            }
+
+            // Update "new" status for older alerts
+            alerts = alerts.map(a => ({
+                ...a,
+                isNew: isWithinHour(a.createdAt || a.posted_at)
+            }));
+
+            renderAlerts();
+            updateAlertCount();
+        }
+
+        function isWithinHour(dateStr) {
+            if (!dateStr) return false;
+            try {
+                const date = new Date(dateStr);
+                const now = new Date();
+                const hourAgo = new Date(now - 60 * 60 * 1000);
+                return date > hourAgo;
+            } catch {
+                return false;
+            }
+        }
+
+        function showToast(alert) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `
+                <div class="toast-icon">🔔</div>
+                <div class="toast-content">
+                    <div class="toast-title">${alert.title || 'new market'}</div>
+                    <div class="toast-subtitle">click to view on polymarket</div>
+                </div>
+                <button class="toast-close" onclick="event.stopPropagation(); this.parentElement.remove();">×</button>
+            `;
+
+            toast.addEventListener('click', () => {
+                window.open(`https://polymarket.com/event/${alert.slug}`, '_blank');
+                toast.remove();
+            });
+
+            container.appendChild(toast);
+
+            // Auto-remove after 8 seconds
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.classList.add('hiding');
+                    setTimeout(() => toast.remove(), 300);
+                }
+            }, 8000);
+        }
+
+        function playNotificationSound() {
+            // Create a simple beep sound using Web Audio API
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+                oscillator.start(audioCtx.currentTime);
+                oscillator.stop(audioCtx.currentTime + 0.3);
+            } catch (e) {
+                console.log('Could not play sound:', e);
+            }
+        }
+
+        function updateStatus(connected) {
+            isConnected = connected;
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+
+            if (connected) {
+                dot.classList.remove('offline');
+                text.textContent = 'monitoring for new markets...';
+            } else {
+                dot.classList.add('offline');
+                text.textContent = 'reconnecting...';
+            }
+        }
+
+        function updateAlertCount() {
+            document.getElementById('alertCount').textContent = `${alertCountToday} alert${alertCountToday !== 1 ? 's' : ''} today`;
+        }
+
+        function renderAlerts() {
+            const grid = document.getElementById('alertsGrid');
+
+            // Filter alerts
+            let filtered = [...alerts];
+
+            if (currentCategory !== 'all') {
+                filtered = filtered.filter(a => a.category === currentCategory);
+            }
+
+            if (currentSubtag !== 'all') {
+                filtered = filtered.filter(a => matchesSubtag(a, currentSubtag));
+            }
+
+            // Sort alerts
+            if (currentSort === 'volume') {
+                filtered.sort((a, b) => parseFloat(b.volume || 0) - parseFloat(a.volume || 0));
+            } else if (currentSort === 'newest') {
+                filtered.sort((a, b) => new Date(b.createdAt || b.posted_at || 0) - new Date(a.createdAt || a.posted_at || 0));
+            } else if (currentSort === 'ending') {
+                filtered.sort((a, b) => {
+                    const aEnd = a.endDate ? new Date(a.endDate) : new Date('2099-01-01');
+                    const bEnd = b.endDate ? new Date(b.endDate) : new Date('2099-01-01');
+                    return aEnd - bEnd;
+                });
+            }
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="waiting-state" style="grid-column: 1/-1;">
+                        <div class="waiting-icon">🔔</div>
+                        <div class="waiting-title">no markets found</div>
+                        <div class="waiting-text">no markets match this filter in the past 3 days. try a different category.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Store filtered for context access
+            window.filteredAlerts = filtered;
+
+            grid.innerHTML = filtered.map((alert, index) => {
+                const volume = parseFloat(alert.volume || 0);
+                const liquidity = parseFloat(alert.liquidity || 0);
+                const timeAgo = formatTimeAgo(alert.createdAt || alert.posted_at);
+
+                return `
+                    <div class="alert-card">
+                        <a href="https://polymarket.com/event/${alert.slug}" target="_blank" style="text-decoration: none; color: inherit;">
+                            <div class="alert-card-header">
+                                <div class="alert-card-badges">
+                                    <span class="badge badge-${alert.category}">${alert.category}</span>
+                                    ${alert.isNew ? '<span class="new-badge">new</span>' : ''}
+                                </div>
+                                <span class="alert-card-time">${timeAgo}</span>
+                            </div>
+                            <div class="alert-card-title">${alert.title || 'untitled'}</div>
+                            <div class="alert-card-stats">
+                                <div class="alert-card-stat">
+                                    <span class="alert-card-stat-value">${formatCurrency(liquidity)}</span>
+                                    <span class="alert-card-stat-label">liquidity</span>
+                                </div>
+                                <div class="alert-card-stat">
+                                    <span class="alert-card-stat-value">${formatCurrency(volume)}</span>
+                                    <span class="alert-card-stat-label">volume</span>
+                                </div>
+                                ${alert.endDate ? `
+                                <div class="alert-card-stat">
+                                    <span class="alert-card-stat-value">${formatDate(alert.endDate)}</span>
+                                    <span class="alert-card-stat-label">ends</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </a>
+                        <div class="alert-card-buttons">
+                            <button class="context-btn" onclick="showContext(${index})">get context</button>
+                            <a href="https://t.me/okdotbet_bot?start=events_${alert.id || alert.slug}" target="_blank" class="okbet-btn">
+                                <img src="/images/okbet.png" alt="okbet">
+                                bet via okbet
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatCurrency(value) {
+            if (value >= 1000000) return '$' + (value / 1000000).toFixed(1) + 'M';
+            if (value >= 1000) return '$' + (value / 1000).toFixed(1) + 'K';
+            return '$' + value.toFixed(0);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'n/a';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } catch {
+                return 'n/a';
+            }
+        }
+
+        function formatTimeAgo(dateStr) {
+            if (!dateStr) return '';
+            try {
+                const date = new Date(dateStr);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / 60000);
+                const diffHours = Math.floor(diffMs / 3600000);
+                const diffDays = Math.floor(diffMs / 86400000);
+
+                if (diffMins < 1) return 'just now';
+                if (diffMins < 60) return `${diffMins}m ago`;
+                if (diffHours < 24) return `${diffHours}h ago`;
+                return `${diffDays}d ago`;
+            } catch {
+                return '';
+            }
+        }
+
+        // Context Modal Functions
+        function showContext(index) {
+            const alert = window.filteredAlerts[index];
+            if (!alert) return;
+
+            const modal = document.getElementById('contextModal');
+            const title = document.getElementById('modalTitle');
+            const content = document.getElementById('modalContent');
+
+            title.textContent = alert.title || 'Market Context';
+            content.innerHTML = '<div class="modal-loading">Generating AI context... (this may take 10-30 seconds)</div>';
+            modal.classList.add('active');
+
+            // Fetch real Market Context from Polymarket AI
+            fetchMarketContext(alert.slug).then(ctx => {
+                content.innerHTML = `<div style="white-space: pre-wrap; line-height: 1.6;">${ctx}</div>`;
+            }).catch(err => {
+                content.innerHTML = `<div style="color: var(--red);">Failed to generate context: ${err.message}</div>`;
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('contextModal').classList.remove('active');
+        }
+
+        async function fetchMarketContext(slug) {
+            if (!slug) throw new Error('No event slug');
+
+            const apiBase = window.location.hostname === 'localhost'
+                ? 'http://localhost:8765'
+                : 'https://polydictions-production.up.railway.app';
+            const response = await fetch(`${apiBase}/api/context?slug=${encodeURIComponent(slug)}`);
+            const data = await response.json();
+
+            if (data.success && data.context) {
+                return data.context;
+            } else {
+                throw new Error(data.error || 'Failed to fetch context');
+            }
+        }
+
+        // Close modal on overlay click
+        document.getElementById('contextModal').addEventListener('click', (e) => {
+            if (e.target.id === 'contextModal') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

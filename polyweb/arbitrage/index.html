@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>arbitrage - polydictions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" type="image/png" href="/images/1.png">
+    
+    <!-- Reown AppKit for Solana -->
+    <script type="module">
+        import { createAppKit } from 'https://esm.sh/@reown/appkit@1.6.8?bundle';
+        import { SolanaAdapter } from 'https://esm.sh/@reown/appkit-adapter-solana@1.6.8?bundle';
+        import { solana } from 'https://esm.sh/@reown/appkit@1.6.8/networks?bundle';
+
+        console.log('📦 Initializing Reown AppKit for Solana...');
+
+        const projectId = '84aef5a9c4278e3eb9b9b5e2c208e194';
+
+        const metadata = {
+            name: 'Polydictions',
+            description: 'Polymarket Tracking Platform',
+            url: window.location.origin,
+            icons: ['https://polydictions.xyz/images/2.png']
+        };
+
+        const modal = createAppKit({
+            adapters: [new SolanaAdapter()],
+            networks: [solana],
+            metadata,
+            projectId,
+            features: {
+                analytics: false,
+                email: false,
+                socials: false,
+                allWallets: true
+            },
+            allWallets: 'SHOW',
+            featuredWalletIds: [
+                'a797aa35c0fadbfc1a53e7f675162ed5226968b44a19ee3d24385c64d1d3c393', // Phantom
+            ]
+        });
+
+        window.reownAppKit = modal;
+
+        // Session management
+        const SESSION_KEY = 'polydictions_wallet_session';
+        
+        function saveSession(address) {
+            localStorage.setItem(SESSION_KEY, JSON.stringify({ address, timestamp: Date.now() }));
+        }
+        
+        function clearSession() {
+            localStorage.removeItem(SESSION_KEY);
+        }
+        
+        function getSavedSession() {
+            try {
+                const data = localStorage.getItem(SESSION_KEY);
+                if (data) {
+                    const session = JSON.parse(data);
+                    if (Date.now() - session.timestamp < 24 * 60 * 60 * 1000) {
+                        return session.address;
+                    }
+                }
+            } catch (e) {}
+            return null;
+        }
+
+        let currentAddress = null;
+        let isProcessing = false;
+        let pageLoadComplete = false;  // Don't auto-verify on page load
+
+        // Subscribe to account changes
+        modal.subscribeAccount((account) => {
+            if (isProcessing) return;
+            
+            console.log('📡 Account state:', account);
+            
+            if (account.isConnected && account.address) {
+                if (account.address === currentAddress) return;
+                
+                isProcessing = true;
+                currentAddress = account.address;
+                saveSession(account.address);
+                console.log('✅ Connected:', account.address);
+                
+                // Only dispatch event if page load is complete (manual connect)
+                if (pageLoadComplete) {
+                    window.dispatchEvent(new CustomEvent('dynamicWalletConnected', {
+                        detail: { address: account.address, chain: 'solana' }
+                    }));
+                } else {
+                    console.log('📦 Skipping auto-verify during page load');
+                }
+                
+                setTimeout(() => { isProcessing = false; }, 500);
+            } else if (!account.isConnected && currentAddress) {
+                currentAddress = null;
+                clearSession();
+                console.log('🔌 Disconnected');
+                window.dispatchEvent(new CustomEvent('dynamicWalletDisconnected'));
+            }
+        });
+        
+        // Page load complete immediately
+        pageLoadComplete = true;
+
+        // Export for disconnect
+        window.clearWalletSession = clearSession;
+        
+        // DynamicWallet compatibility layer
+        window.DynamicWallet = {
+            connect: () => modal.open(),
+            disconnect: () => modal.disconnect(),
+            getWalletAddress: () => currentAddress,
+            isConnected: () => !!currentAddress,
+            getAuthToken: () => currentAddress,
+            client: modal
+        };
+
+        console.log('✅ Reown AppKit Ready');
+    </script>
+    <style>
+        .arb-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: var(--shadow);
+            color: var(--text-dark);
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .arb-content-wrapper {
+            position: relative;
+        }
+        .arb-content {
+            filter: blur(10px);
+            pointer-events: none;
+            user-select: none;
+        }
+        .arb-content-unlocked {
+            filter: none;
+            pointer-events: auto;
+            user-select: auto;
+        }
+        .arb-card .lock-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        /* Stats lock overlay */
+        .stats-container {
+            position: relative;
+        }
+        .stats-container.locked .stats-content {
+            filter: blur(8px);
+            pointer-events: none;
+            user-select: none;
+        }
+        .stats-lock-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(2px);
+            z-index: 10;
+            gap: 12px;
+            border-radius: 24px;
+        }
+        .stats-container.locked .stats-lock-overlay {
+            display: flex;
+        }
+        .stats-lock-overlay .lock-icon {
+            font-size: 32px;
+        }
+        .stats-lock-overlay .lock-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-dark);
+            text-align: center;
+        }
+        .stats-lock-overlay .lock-amount {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .arb-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        }
+        /* Unlock button on cards */
+        .unlock-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, var(--primary) 0%, #ff8c42 100%);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(255, 107, 0, 0.3);
+        }
+        .unlock-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(255, 107, 0, 0.5);
+        }
+        .unlock-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+        .page-btn {
+            padding: 10px 16px;
+            background: transparent;
+            border: 1px solid var(--border-light);
+            border-radius: 24px;
+            color: var(--text-white);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 44px;
+        }
+        .page-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .page-btn.active {
+            background: var(--text-white);
+            color: var(--primary);
+            border-color: var(--text-white);
+        }
+        .page-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .arb-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .arb-title {
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: var(--text-dark);
+        }
+        .arb-spread {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--green);
+            white-space: nowrap;
+        }
+        .arb-platforms {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 12px;
+            align-items: center;
+        }
+        .arb-platform {
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: 16px;
+            padding: 16px;
+        }
+        .arb-platform-name {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            text-transform: lowercase;
+        }
+        .arb-platform-price {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .arb-platform-price.buy {
+            color: var(--green);
+        }
+        .arb-platform-price.sell {
+            color: var(--red);
+        }
+        .arb-arrow {
+            color: var(--primary);
+            font-size: 20px;
+        }
+        .arb-action {
+            background: rgba(251, 101, 30, 0.1);
+            border-radius: 16px;
+            padding: 14px;
+            font-size: 14px;
+            color: var(--primary);
+            text-transform: lowercase;
+        }
+        .arb-links {
+            display: flex;
+            gap: 8px;
+        }
+        .arb-link {
+            flex: 1;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: 16px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            transition: all 0.2s;
+            text-transform: lowercase;
+        }
+        .arb-link:hover {
+            background: var(--primary);
+            color: white;
+        }
+        .disclaimer {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        .disclaimer h3 {
+            color: var(--text-white);
+            font-size: 14px;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+        .disclaimer p {
+            color: var(--text-muted-light);
+            font-size: 13px;
+            line-height: 1.6;
+            text-transform: lowercase;
+        }
+        .sport-tabs {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .sport-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid var(--border-light);
+            border-radius: 24px;
+            font-size: 13px;
+            color: var(--text-white);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: lowercase;
+        }
+        .sport-tab:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .sport-tab.active {
+            background: var(--text-white);
+            border-color: var(--text-white);
+            color: var(--primary);
+        }
+        .threshold-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .threshold-selector label {
+            font-size: 14px;
+            color: var(--text-muted-light);
+            text-transform: lowercase;
+        }
+        .threshold-selector select {
+            padding: 10px 16px;
+            background: white;
+            border: none;
+            border-radius: 24px;
+            color: var(--text-dark);
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .refresh-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .refresh-btn svg {
+            transition: transform 0.3s;
+        }
+        .refresh-btn.loading svg {
+            animation: rotate 1s linear infinite;
+        }
+        @keyframes rotate {
+            to { transform: rotate(360deg); }
+        }
+        .info-card {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 24px;
+            margin-top: 32px;
+            margin-bottom: 16px;
+        }
+        .info-card h3 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: var(--text-white);
+            text-transform: lowercase;
+        }
+        .info-card p {
+            font-size: 14px;
+            color: var(--text-muted-light);
+            line-height: 1.7;
+            margin-bottom: 16px;
+            text-transform: lowercase;
+        }
+        .info-card p:last-child {
+            margin-bottom: 0;
+        }
+        .info-card strong {
+            color: var(--text-white);
+        }
+        .kbd-hint {
+            font-size: 11px;
+            color: var(--text-muted-light);
+            margin-top: 8px;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .kbd-hint span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .kbd {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+        }
+        .wallet-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            font-size: 13px;
+            color: var(--text-white);
+        }
+        .wallet-indicator .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ADE80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link">home</a>
+            <a href="/markets/" class="navbar-link">markets</a>
+            <a href="/alerts/" class="navbar-link">alerts</a>
+            <a href="/whales/" class="navbar-link">whales</a>
+            <a href="/arbitrage/" class="navbar-link active">arbitrage</a>
+            <a href="/roadmap/" class="navbar-link">roadmap</a>
+        </div>
+        <div class="navbar-right">
+            <div class="wallet-indicator" style="display: none;">
+                <div class="status-dot"></div>
+                <span class="wallet-addr">connected</span>
+                <button onclick="disconnectWallet()" style="background: none; border: none; color: var(--text-muted-light); cursor: pointer; font-size: 11px; margin-left: 8px;" title="disconnect">✕</button>
+            </div>
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                follow on x
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <h1 class="page-title">arbitrage scanner</h1>
+                <p class="page-subtitle">find price differences between polymarket and kalshi</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="sport-tabs">
+                <button class="sport-tab active" data-sport="all">all sports</button>
+                <button class="sport-tab" data-sport="general">politics/crypto</button>
+                <button class="sport-tab" data-sport="nfl">nfl</button>
+                <button class="sport-tab" data-sport="nba">nba</button>
+                <button class="sport-tab" data-sport="nhl">nhl</button>
+                <button class="sport-tab" data-sport="mlb">mlb</button>
+                <button class="sport-tab" data-sport="cfb">cfb</button>
+                <button class="sport-tab" data-sport="cbb">cbb</button>
+            </div>
+
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-4" id="statsGrid" style="margin-bottom: 24px;">
+            <div class="card" style="position: relative; overflow: hidden;">
+                <div class="stat-content" style="filter: blur(10px); pointer-events: none; user-select: none;">
+                    <div class="stat-value" id="totalOpps">0</div>
+                    <div class="stat-label">opportunities found</div>
+                </div>
+            </div>
+            <div class="card" style="position: relative; overflow: hidden;">
+                <div class="stat-content" style="filter: blur(10px); pointer-events: none; user-select: none;">
+                    <div class="stat-value" id="avgSpread">0%</div>
+                    <div class="stat-label">average spread</div>
+                </div>
+            </div>
+            <div class="card" style="position: relative; overflow: hidden;">
+                <div class="stat-content" style="filter: blur(10px); pointer-events: none; user-select: none;">
+                    <div class="stat-value" id="bestSpread">0%</div>
+                    <div class="stat-label">best spread</div>
+                </div>
+            </div>
+            <div class="card" style="position: relative; overflow: hidden;">
+                <div class="stat-content" style="filter: blur(10px); pointer-events: none; user-select: none;">
+                    <div class="stat-value" id="lastUpdate">-</div>
+                    <div class="stat-label">last updated</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Arbitrage Grid -->
+        <div class="grid grid-2" id="arbGrid">
+            <div class="loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" style="display: flex; justify-content: center; gap: 8px; margin: 24px 0; flex-wrap: wrap;"></div>
+
+        <!-- Info Card -->
+        <div class="info-card">
+            <h3>how arbitrage works</h3>
+            <p>
+                arbitrage opportunities occur when the same event has different prices on different platforms.
+                for example, if an outcome is priced at 45¢ on polymarket but 50¢ on kalshi,
+                you could theoretically buy on polymarket and sell on kalshi for a 5% spread.
+            </p>
+            <p>
+                <strong>important:</strong> spreads shown include fees and are net profit estimates.
+                negative spreads mean you'd lose money. positive spreads indicate potential profit.
+                always verify prices on both platforms before trading as they change rapidly.
+            </p>
+            <p>
+                <strong>tips:</strong> the best opportunities are in less liquid markets where price discovery is slower.
+                major sports events with high volume tend to have minimal spreads due to efficient pricing.
+                focus on newer markets or niche events for better arbitrage potential.
+            </p>
+        </div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+            <h3>important disclaimer</h3>
+            <p>
+                arbitrage opportunities shown here are for informational purposes only.
+                prices may be delayed and opportunities may no longer exist by the time you act.
+                always verify current prices on both platforms before trading.
+                trading on prediction markets carries significant risk.
+            </p>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2025 polydictions. prediction markets intelligence.</p>
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <!-- Dynamic.xyz SDK bundle -->
+    <!-- Reown loaded in <head> via ES modules -->
+    <script>
+        // ============ WALLET AUTHENTICATION (DYNAMIC.XYZ + SERVER-VERIFIED) ============
+        // API_BASE is defined in /js/api.js
+        const MIN_TOKEN_BALANCE = 0; // TEMP: disabled for screenshot
+
+        // Session state
+        let walletConnected = false;
+        let walletAddress = null;
+        let sessionToken = null;
+        let tokenBalance = 0;
+
+        // Flag to prevent auto-verification during page load
+        let sessionCheckDone = false;
+
+        // Listen for Dynamic wallet events
+        window.addEventListener('dynamicWalletConnected', async (event) => {
+            console.log('[Wallet] Dynamic wallet connected:', event.detail);
+            
+            // If we already have a valid session, don't re-verify
+            if (walletConnected && sessionToken) {
+                console.log('[Wallet] Already have valid session, skipping verification');
+                return;
+            }
+            
+            walletAddress = event.detail.address;
+            const authToken = event.detail.authToken;
+
+            // Verify on our server
+            await verifyWalletOnServer(walletAddress, authToken);
+        });
+
+        window.addEventListener('dynamicWalletDisconnected', () => {
+            console.log('[Wallet] Dynamic wallet disconnected');
+            handleDisconnect();
+        });
+
+        // Check if Dynamic SDK is available (fallback to Phantom)
+        function isDynamicAvailable() {
+            return window.DynamicWallet && typeof window.DynamicWallet.connect === 'function';
+        }
+        
+        // Wait for DynamicWallet to be available
+        async function waitForDynamicWallet(timeout = 3000) {
+            const start = Date.now();
+            while (!isDynamicAvailable() && Date.now() - start < timeout) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return isDynamicAvailable();
+        }
+
+        // Check if Phantom is installed (fallback)
+        function isPhantomInstalled() {
+            return window.solana && window.solana.isPhantom;
+        }
+
+        // Verify wallet on server after Dynamic connection
+        async function verifyWalletOnServer(address, authToken) {
+            const statusEl = document.getElementById('inlineWalletStatus');
+            const connectBtn = document.getElementById('inlineConnectBtn');
+
+            try {
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #FBBF24;">verifying token balance...</span>';
+                }
+
+                // Verify on server with JWT token from Dynamic
+                const verifyResp = await fetch(`${API_BASE}/api/wallet/verify`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken ? `Bearer ${authToken}` : ''
+                    },
+                    body: JSON.stringify({ wallet: address })
+                });
+
+                const verifyData = await verifyResp.json();
+
+                if (!verifyData.success) {
+                    throw new Error(verifyData.error || 'Verification failed');
+                }
+
+                tokenBalance = verifyData.balance || 0;
+
+                if (verifyData.access) {
+                    sessionToken = verifyData.session_token;
+                    walletConnected = true;
+
+                    localStorage.setItem('wallet_session', JSON.stringify({
+                        wallet: address,
+                        token: sessionToken,
+                        balance: tokenBalance,
+                        expires: Date.now() + (verifyData.expires_in * 1000)
+                    }));
+
+                    unlockContent();
+                    return true;
+                } else {
+                    // Insufficient tokens - show message
+                    if (statusEl) {
+                        statusEl.innerHTML = `<span style="color: #F87171;">insufficient balance: ${tokenBalance.toLocaleString()} / ${MIN_TOKEN_BALANCE.toLocaleString()} $POLY</span><br><a href="https://pump.fun/coin/iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump" target="_blank" style="color: #FBBF24; font-size: 12px;">buy $POLY on pump.fun →</a>`;
+                    }
+                    if (connectBtn) {
+                        connectBtn.disabled = false;
+                        connectBtn.innerHTML = 'try again';
+                    }
+                    return false;
+                }
+            } catch (err) {
+                console.error('Server verification error:', err);
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #F87171;">' + (err.message || 'verification failed') + '</span>';
+                }
+                if (connectBtn) {
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = 'connect wallet to unlock';
+                }
+                return false;
+            }
+        }
+
+        // Handle disconnect
+        function handleDisconnect() {
+            walletConnected = false;
+            walletAddress = null;
+            sessionToken = null;
+            tokenBalance = 0;
+            localStorage.removeItem('wallet_session');
+            lockContent();
+        }
+
+        // Connect wallet using Dynamic.xyz (primary) or Phantom (fallback)
+        async function connectWallet() {
+            const statusEl = document.getElementById('inlineWalletStatus');
+            const connectBtn = document.getElementById('inlineConnectBtn');
+
+            // Wait for Reown/Dynamic SDK to load
+            const dynamicReady = await waitForDynamicWallet();
+            
+            if (dynamicReady) {
+                try {
+                    if (connectBtn) {
+                        connectBtn.disabled = true;
+                        connectBtn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></div> connecting...';
+                    }
+                    if (statusEl) {
+                        statusEl.textContent = '';
+                    }
+
+                    // Check if wallet is already connected via Reown
+                    if (window.DynamicWallet.isConnected()) {
+                        const address = window.DynamicWallet.getWalletAddress();
+                        console.log('[Wallet] Already connected:', address);
+                        walletAddress = address;
+                        // Directly verify without opening modal
+                        await verifyWalletOnServer(address, null);
+                        if (connectBtn && !walletConnected) {
+                            connectBtn.disabled = false;
+                            connectBtn.innerHTML = 'try again';
+                        }
+                        return walletConnected;
+                    }
+
+                    console.log('[Wallet] Opening Reown connect modal...');
+                    await window.DynamicWallet.connect();
+                    // The dynamicWalletConnected event will handle the rest
+                    return true;
+
+                } catch (err) {
+                    console.error('[Wallet] Reown connection error:', err);
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span style="color: #F87171;">' + (err.message || 'connection failed') + '</span>';
+                    }
+                    if (connectBtn) {
+                        connectBtn.disabled = false;
+                        connectBtn.innerHTML = 'connect wallet to unlock';
+                    }
+                    return false;
+                }
+            }
+
+            // Fallback to direct Phantom connection
+            if (!isPhantomInstalled()) {
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #F87171;">no wallet found.</span> <a href="https://phantom.app/" target="_blank" style="color: #FBBF24;">install phantom</a>';
+                }
+                return false;
+            }
+
+            try {
+                if (connectBtn) {
+                    connectBtn.disabled = true;
+                    connectBtn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></div> connecting...';
+                }
+                if (statusEl) {
+                    statusEl.textContent = '';
+                }
+
+                // Connect to Phantom directly
+                const resp = await window.solana.connect();
+                walletAddress = resp.publicKey.toString();
+
+                // Verify on server
+                await verifyWalletOnServer(walletAddress, null);
+
+                if (connectBtn) {
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = 'connect wallet to unlock';
+                }
+                return walletConnected;
+
+            } catch (err) {
+                console.error('Wallet connection error:', err);
+                if (statusEl) {
+                    statusEl.innerHTML = '<span style="color: #F87171;">' + (err.message || 'connection failed') + '</span>';
+                }
+                if (connectBtn) {
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = 'connect wallet to unlock';
+                }
+                return false;
+            }
+        }
+
+
+        // Disconnect wallet
+        async function disconnectWallet() {
+            try {
+                // Disconnect from server
+                if (walletAddress) {
+                    await fetch(`${API_BASE}/api/wallet/disconnect`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ wallet: walletAddress })
+                    });
+                }
+
+                // Disconnect from Dynamic SDK
+                if (isDynamicAvailable() && window.DynamicWallet.isConnected()) {
+                    await window.DynamicWallet.disconnect();
+                } else if (window.solana) {
+                    await window.solana.disconnect();
+                }
+            } catch (e) {
+                console.error('Disconnect error:', e);
+            }
+
+            // Clear state
+            walletConnected = false;
+            walletAddress = null;
+            sessionToken = null;
+            tokenBalance = 0;
+            localStorage.removeItem('wallet_session');
+
+            // Show gate again
+            lockContent();
+        }
+
+        // Check existing session on page load
+        async function checkExistingSession() {
+            // Dev bypass (ONLY works if server DEV_MODE=true): ?bypass=true
+            // Server will reject this in production mode
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('bypass') === 'true') {
+                console.warn('⚠️ Dev bypass requested - only works if server DEV_MODE=true');
+                walletAddress = 'dev-bypass';
+                sessionToken = 'dev-bypass';
+                walletConnected = true;
+                unlockContent();
+                return true;
+            }
+
+            const stored = localStorage.getItem('wallet_session');
+            if (!stored) return false;
+
+            try {
+                const session = JSON.parse(stored);
+
+                // Check local expiry first
+                if (Date.now() > session.expires) {
+                    localStorage.removeItem('wallet_session');
+                    return false;
+                }
+
+                // Verify session with server
+                const checkResp = await fetch(`${API_BASE}/api/wallet/check?wallet=${session.wallet}&token=${session.token}`);
+                const checkData = await checkResp.json();
+
+                if (checkData.valid) {
+                    walletAddress = session.wallet;
+                    sessionToken = session.token;
+                    tokenBalance = checkData.balance || session.balance;
+                    walletConnected = true;
+                    unlockContent();
+                    return true;
+                } else {
+                    localStorage.removeItem('wallet_session');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Session check error:', e);
+                localStorage.removeItem('wallet_session');
+                return false;
+            }
+        }
+
+        // Unlock content after successful verification
+        function unlockContent() {
+            const walletIndicator = document.querySelector('.wallet-indicator');
+
+            // Remove blur from all cards
+            document.querySelectorAll('.arb-content').forEach(el => {
+                el.classList.remove('arb-content');
+                el.classList.add('arb-content-unlocked');
+            });
+
+            // Hide lock overlays
+            document.querySelectorAll('.lock-overlay').forEach(el => {
+                el.style.display = 'none';
+            });
+
+            // Remove blur from stats
+            document.querySelectorAll('.stat-content').forEach(el => {
+                el.style.filter = 'none';
+                el.style.pointerEvents = 'auto';
+                el.style.userSelect = 'auto';
+            });
+
+            // Show wallet indicator in navbar
+            if (walletIndicator) {
+                walletIndicator.style.display = 'inline-flex';
+                const addrEl = walletIndicator.querySelector('.wallet-addr');
+                if (addrEl && walletAddress && walletAddress !== 'dev-bypass') {
+                    addrEl.textContent = walletAddress.slice(0, 4) + '...' + walletAddress.slice(-4);
+                }
+            }
+
+            // Reload data now that we're authenticated
+            lastFetchTime = null; // Clear cache
+            loadOpportunities();
+        }
+
+        // Lock content
+        function lockContent() {
+            const walletIndicator = document.querySelector('.wallet-indicator');
+
+            if (walletIndicator) {
+                walletIndicator.style.display = 'none';
+            }
+
+            // Reload to show locked state
+            loadOpportunities();
+        }
+
+        // Update popup balance display
+        // ============ ARBITRAGE SCANNER ============
+        // State
+        let allOpportunities = [];
+        let filteredOpportunities = [];
+        let currentSport = 'all';
+        let minSpread = 1;
+        let currentPage = 1;
+        let totalPages = 1;
+        const itemsPerPage = 20;
+        let lastFetchTime = null;
+        const CACHE_TTL = 60000; // 1 minute cache
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check for existing valid session (unlocks content if valid)
+            await checkExistingSession();
+
+            // Initialize arbitrage scanner (will show locked preview for non-authenticated)
+            loadOpportunities();
+            setupEventListeners();
+
+            // Auto-refresh every 2 minutes
+            setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    loadOpportunities(true); // silent refresh
+                }
+            }, 120000);
+        });
+
+        // Build fetch headers with session credentials
+        function getAuthHeaders() {
+            const headers = { 'Content-Type': 'application/json' };
+            if (walletAddress && sessionToken) {
+                headers['X-Wallet-Address'] = walletAddress;
+                headers['X-Session-Token'] = sessionToken;
+            }
+            return headers;
+        }
+
+        // Authenticated fetch wrapper
+        async function authFetch(url) {
+            const headers = getAuthHeaders();
+            console.log('authFetch:', url, 'headers:', headers);
+            const response = await fetch(url, { headers });
+
+            // Handle 401 - show gate
+            if (response.status === 401) {
+                const data = await response.json();
+                console.log('Auth required:', data);
+
+                // Clear invalid session
+                walletConnected = false;
+                sessionToken = null;
+                localStorage.removeItem('wallet_session');
+
+                // Show preview data if available
+                if (data.preview) {
+                    showPreviewState(data.preview, data.required_tokens);
+                }
+
+                return { success: false, auth_required: true, preview: data.preview };
+            }
+
+            return await response.json();
+        }
+
+        // Show preview state when not authenticated
+        function showPreviewState(preview, requiredTokens) {
+            const grid = document.getElementById('arbGrid');
+
+            // Update stats with preview
+            document.getElementById('totalOpps').textContent = preview.total_available || '15+';
+            document.getElementById('bestSpread').textContent = preview.best_spread || '8%+';
+            document.getElementById('avgSpread').textContent = '—';
+            document.getElementById('lastUpdate').textContent = 'locked';
+
+            // Show locked cards
+            grid.innerHTML = `
+                <div class="arb-card" style="grid-column: 1/-1;">
+                    <div style="text-align: center; padding: 40px 20px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 16px;">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <h3 style="margin-bottom: 8px; color: var(--text-primary);">arbitrage data is protected</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 16px;">
+                            connect your wallet with <strong>${requiredTokens.toLocaleString()} $POLY</strong> to unlock ${preview.total_available} opportunities
+                        </p>
+                        <p style="color: var(--text-muted-light); font-size: 12px;">
+                            available sports: ${preview.sports?.join(', ') || 'NFL, NBA, NHL, MLB'}
+                        </p>
+                        <button id="inlineConnectBtn" onclick="connectWallet()" class="btn" style="margin-top: 20px; background: var(--primary); color: white; padding: 12px 24px; border-radius: 12px; font-weight: 600;">
+                            connect wallet to unlock
+                        </button>
+                        <div id="inlineWalletStatus" style="margin-top: 12px; font-size: 13px; color: var(--text-muted);"></div>
+                    </div>
+                </div>
+            `;
+            // Don't show gate here - let user click the button to open it
+        }
+
+        async function loadOpportunities(silent = false) {
+            const grid = document.getElementById('arbGrid');
+
+            // Check cache
+            if (lastFetchTime && (Date.now() - lastFetchTime < CACHE_TTL) && !silent) {
+                console.log('Using cached data');
+                return;
+            }
+
+            if (!silent) {
+                grid.innerHTML = '<div class="loading" style="grid-column: 1/-1;"><div class="spinner"></div></div>';
+            }
+
+            try {
+                let combined = [];
+
+                // Handle 'general' (politics/crypto) as a single API call
+                if (currentSport === 'general') {
+                    const data = await authFetch(`${API_BASE}/api/arbitrage?sport=general&min_diff=${minSpread}`);
+
+                    if (data.auth_required) {
+                        return; // Preview already shown
+                    }
+
+                    if (data.success && data.opportunities) {
+                        combined = data.opportunities;
+                    }
+                } else {
+                    // Build sport parameter - for 'all', fetch all sports
+                    let sports = [];
+                    if (currentSport === 'all') {
+                        sports = ['nfl', 'nba', 'nhl', 'mlb', 'cfb', 'cbb'];
+                    } else {
+                        sports = [currentSport];
+                    }
+
+                    // Fetch from all requested sports in parallel
+                    const promises = sports.map(sport =>
+                        authFetch(`${API_BASE}/api/arbitrage?sport=${sport}&min_diff=${minSpread}`)
+                    );
+
+                    const results = await Promise.all(promises);
+
+                    // Check if any result requires auth
+                    if (results.some(r => r.auth_required)) {
+                        return; // Preview already shown
+                    }
+
+                    // Combine all opportunities
+                    for (const data of results) {
+                        if (data.success && data.opportunities) {
+                            combined.push(...data.opportunities);
+                        }
+                    }
+                }
+
+                // Group by game (polymarket_slug) and combine teams
+                const gameMap = new Map();
+                for (const opp of combined) {
+                    const gameKey = opp.polymarket_slug || opp.game;
+                    if (!gameMap.has(gameKey)) {
+                        gameMap.set(gameKey, {
+                            game: opp.game,
+                            slug: opp.polymarket_slug,
+                            category: opp.sport.toLowerCase(),
+                            title: opp.kalshi_title?.replace(/Winner\?$/, '').trim() || opp.game,
+                            teams: []
+                        });
+                    }
+                    gameMap.get(gameKey).teams.push({
+                        team: opp.team,
+                        polyPrice: Math.round(opp.polymarket_price * 100),
+                        kalshiPrice: Math.round(opp.kalshi_price * 100),
+                        kalshiTicker: opp.kalshi_ticker,
+                        spread: parseFloat(opp.difference.toFixed(1)),
+                        action: opp.action.toLowerCase()
+                    });
+                }
+
+                // Transform to array with best spread per game
+                allOpportunities = Array.from(gameMap.values()).map((game, idx) => {
+                    // Sort teams by spread descending
+                    game.teams.sort((a, b) => b.spread - a.spread);
+                    const bestTeam = game.teams[0];
+                    return {
+                        id: idx + 1,
+                        title: game.title,
+                        category: game.category,
+                        polymarket: {
+                            price: bestTeam.polyPrice,
+                            slug: game.slug
+                        },
+                        kalshi: {
+                            price: bestTeam.kalshiPrice,
+                            ticker: bestTeam.kalshiTicker
+                        },
+                        spread: bestTeam.spread,
+                        action: bestTeam.action,
+                        teams: game.teams  // All teams for this game
+                    };
+                });
+
+                lastFetchTime = Date.now();
+                currentPage = 1; // Reset to first page
+                filterAndRender();
+                updateStats();
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Error loading opportunities:', error);
+                if (!silent) {
+                    grid.innerHTML = `
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <h3>error loading data</h3>
+                            <p>could not connect to api server. make sure the server is running.</p>
+                            <p style="color: var(--text-muted); font-size: 12px; margin-top: 8px;">${error.message}</p>
+                        </div>
+                    `;
+                }
+            } finally {
+                // No cleanup needed
+            }
+        }
+
+        function filterAndRender() {
+            filteredOpportunities = allOpportunities.filter(opp => {
+                if (currentSport !== 'all' && opp.category !== currentSport) return false;
+                return true;
+            }).sort((a, b) => Math.abs(b.spread) - Math.abs(a.spread)); // Sort by absolute spread
+
+            // Calculate pagination
+            totalPages = Math.ceil(filteredOpportunities.length / itemsPerPage);
+            if (currentPage > totalPages) currentPage = totalPages || 1;
+
+            renderOpportunities();
+            renderPagination();
+        }
+
+        function renderOpportunities() {
+            const grid = document.getElementById('arbGrid');
+
+            if (filteredOpportunities.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <h3>no opportunities found</h3>
+                        <p>try adjusting your filters or check back later</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Paginate
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageOpps = filteredOpportunities.slice(start, end);
+
+            grid.innerHTML = pageOpps.map(opp => {
+                // Generate URLs
+                const kalshiTicker = opp.kalshi?.ticker || '';
+                let kalshiUrl = 'https://kalshi.com/markets';
+
+                if (opp.category === 'general') {
+                    if (kalshiTicker) {
+                        kalshiUrl = `https://kalshi.com/markets?search=${encodeURIComponent(kalshiTicker)}`;
+                    }
+                } else {
+                    const tickerParts = kalshiTicker.split('-');
+                    const series = (tickerParts[0] || '').toLowerCase();
+                    const eventTicker = tickerParts.slice(0, 2).join('-').toLowerCase();
+                    const seriesSlugMap = {
+                        'kxnbagame': 'professional-basketball-game',
+                        'kxnflgame': 'professional-football-game',
+                        'kxnhlgame': 'professional-hockey-game',
+                        'kxmlbgame': 'professional-baseball-game',
+                        'kxcfbgame': 'college-football-game',
+                        'kxncaambgame': 'college-basketball-game'
+                    };
+                    const slug = seriesSlugMap[series] || series;
+                    if (series && eventTicker) {
+                        kalshiUrl = `https://kalshi.com/markets/${series}/${slug}/${eventTicker}`;
+                    }
+                }
+
+                const polySlug = opp.polymarket.slug || '';
+                const polymarketUrl = polySlug
+                    ? `https://polymarket.com/event/${polySlug}`
+                    : 'https://polymarket.com';
+
+                // Best spread for header
+                const bestSpread = opp.spread;
+                const spreadPrefix = bestSpread >= 0 ? '+' : '';
+                const spreadColor = bestSpread >= 0 ? 'var(--green)' : 'var(--red)';
+
+                // Render teams rows
+                const teamsHtml = (opp.teams || []).map(t => {
+                    const tSpreadPrefix = t.spread >= 0 ? '+' : '';
+                    const tSpreadColor = t.spread >= 0 ? 'var(--green)' : 'var(--red)';
+                    const buyPlatform = t.polyPrice < t.kalshiPrice ? 'Poly' : 'Kalshi';
+                    const sellPlatform = buyPlatform === 'Poly' ? 'Kalshi' : 'Poly';
+                    return `
+                        <div class="team-row" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
+                            <div style="font-weight: 600; min-width: 60px;">${t.team || '—'}</div>
+                            <div style="display: flex; gap: 16px; align-items: center; font-size: 13px;">
+                                <span style="color: var(--text-muted);">P: <span style="color: var(--green)">${t.polyPrice}¢</span></span>
+                                <span style="color: var(--text-muted);">K: <span style="color: var(--red)">${t.kalshiPrice}¢</span></span>
+                                <span style="color: ${tSpreadColor}; font-weight: 600; min-width: 50px; text-align: right;">${tSpreadPrefix}${t.spread}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Determine content class and overlay visibility based on wallet connection
+                const contentClass = walletConnected ? 'arb-content-unlocked' : 'arb-content';
+                const overlayStyle = walletConnected ? 'display: none;' : '';
+
+                return `
+                    <div class="arb-card">
+                        <div class="arb-content-wrapper">
+                            <div class="${contentClass}">
+                                <div class="arb-header">
+                                    <div class="arb-title">${opp.title}</div>
+                                    <div class="arb-spread" style="color: ${spreadColor}">${spreadPrefix}${bestSpread}%</div>
+                                </div>
+
+                                <div style="margin: 12px 0;">
+                                    ${teamsHtml}
+                                </div>
+
+                                <div class="arb-links">
+                                    <a href="${polymarketUrl}" target="_blank" class="arb-link">
+                                        open polymarket
+                                    </a>
+                                    <a href="${kalshiUrl}" target="_blank" class="arb-link">
+                                        open kalshi
+                                    </a>
+                                </div>
+                            </div>
+
+                            <div class="lock-overlay" style="${overlayStyle}">
+                                <button class="unlock-btn" onclick="connectWallet()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                    </svg>
+                                    unlock this arbitrage
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderPagination() {
+            const paginationEl = document.getElementById('pagination');
+            if (!paginationEl) return;
+
+            if (totalPages <= 1) {
+                paginationEl.innerHTML = '';
+                return;
+            }
+
+            let pages = '';
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    pages += `<button class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    pages += `<span style="color: var(--text-muted-light);">...</span>`;
+                }
+            }
+
+            paginationEl.innerHTML = `
+                <button class="page-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>prev</button>
+                ${pages}
+                <button class="page-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>next</button>
+            `;
+
+            // Add click handlers
+            paginationEl.querySelectorAll('.page-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const page = parseInt(btn.dataset.page);
+                    if (page >= 1 && page <= totalPages) {
+                        currentPage = page;
+                        renderOpportunities();
+                        renderPagination();
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                });
+            });
+        }
+
+        function updateStats() {
+            const opps = filteredOpportunities;
+
+            document.getElementById('totalOpps').textContent = opps.length;
+
+            if (opps.length > 0) {
+                const avgSpread = opps.reduce((sum, o) => sum + Math.abs(o.spread), 0) / opps.length;
+                const spreads = opps.map(o => o.spread);
+                const bestSpread = spreads.reduce((max, s) => Math.abs(s) > Math.abs(max) ? s : max, spreads[0]);
+
+                document.getElementById('avgSpread').textContent = avgSpread.toFixed(1) + '%';
+                const bestPrefix = bestSpread >= 0 ? '+' : '';
+                document.getElementById('bestSpread').textContent = bestPrefix + bestSpread.toFixed(1) + '%';
+            } else {
+                document.getElementById('avgSpread').textContent = '0%';
+                document.getElementById('bestSpread').textContent = '0%';
+            }
+        }
+
+        // Unlock popup functions
+        function setupEventListeners() {
+            // Sport tabs - reload from API when switching
+            document.querySelectorAll('.sport-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    if (currentSport === tab.dataset.sport) return; // Already selected
+
+                    document.querySelectorAll('.sport-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentSport = tab.dataset.sport;
+
+                    // Reload data for new sport
+                    lastFetchTime = null; // Invalidate cache
+                    loadOpportunities();
+                });
+            });
+
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                // R - Refresh
+                if (e.key === 'r' || e.key === 'R') {
+                    if (!e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                        e.preventDefault();
+                        lastFetchTime = null;
+                        loadOpportunities();
+                    }
+                }
+
+                // Arrow keys for pagination
+                if (e.key === 'ArrowLeft' && currentPage > 1) {
+                    e.preventDefault();
+                    currentPage--;
+                    renderOpportunities();
+                    renderPagination();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                if (e.key === 'ArrowRight' && currentPage < totalPages) {
+                    e.preventDefault();
+                    currentPage++;
+                    renderOpportunities();
+                    renderPagination();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+
+                // Number keys for sport filters (1-3)
+                if (e.key >= '1' && e.key <= '3' && !e.ctrlKey && !e.metaKey) {
+                    const tabs = document.querySelectorAll('.sport-tab');
+                    const tabIndex = parseInt(e.key) - 1;
+                    if (tabs[tabIndex]) {
+                        tabs[tabIndex].click();
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

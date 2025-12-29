@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>whale tracker - polydictions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" type="image/png" href="/images/1.png">
+    <style>
+        .live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            font-size: 13px;
+            color: white;
+        }
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Live indicator in stat card */
+        .stat-with-live {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stat-live-dot {
+            width: 6px;
+            height: 6px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+            cursor: help;
+        }
+
+        /* Quick Filters - Compact One Line */
+        .quick-filters {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+        .filters-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+
+        /* Side Pill Buttons */
+        .side-pills {
+            display: flex;
+            gap: 4px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 4px;
+        }
+        .side-pill {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            border: none;
+            color: #6b7280;
+            border-radius: 8px;
+        }
+        .side-pill:hover {
+            color: #1a1a2e;
+        }
+        .side-pill.active {
+            background: #f97316;
+            color: white;
+            box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
+        }
+
+        /* Filter Elements */
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .filter-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #6b7280;
+            white-space: nowrap;
+        }
+        .filter-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #1a1a2e;
+            background: white;
+            cursor: pointer;
+            min-width: 100px;
+        }
+        .filter-select:focus {
+            outline: none;
+            border-color: #FF6600;
+        }
+        .filter-input {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #1a1a2e;
+            background: #f5f5f5;
+            width: 60px;
+            transition: background 0.2s;
+        }
+        .filter-input:focus {
+            outline: none;
+            background: #ebebeb;
+        }
+        .filter-input::placeholder {
+            color: #9ca3af;
+        }
+        .filter-input.search {
+            width: 180px;
+            padding-left: 36px;
+            background: #f5f5f5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") 12px center no-repeat;
+        }
+        .filter-separator {
+            width: 1px;
+            height: 20px;
+            background: #e5e7eb;
+            margin: 0 8px;
+        }
+        .price-range {
+            display: flex;
+            align-items: center;
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 2px;
+        }
+        .price-range .filter-input {
+            background: transparent;
+            text-align: center;
+            width: 55px;
+            -moz-appearance: textfield;
+        }
+        .price-range .filter-input::-webkit-outer-spin-button,
+        .price-range .filter-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .price-range .filter-input:focus {
+            background: rgba(255,255,255,0.5);
+        }
+        .price-range-separator {
+            color: #9ca3af;
+            font-size: 12px;
+            padding: 0 4px;
+        }
+
+        /* Size Slider */
+        .size-slider-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .size-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100px;
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #f97316;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .size-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 10px rgba(249, 115, 22, 0.5);
+        }
+        .size-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #f97316;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4);
+        }
+        .size-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f97316;
+            min-width: 50px;
+        }
+
+        /* First Trade Toggle */
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: #e5e7eb;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .toggle-switch.active {
+            background: #f97316;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .toggle-switch.active::after {
+            transform: translateX(20px);
+        }
+        .toggle-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        /* Info Icon with Tooltip */
+        .info-icon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            color: #9ca3af;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        .info-icon:hover {
+            color: #6b7280;
+        }
+        .info-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            color: #6b7280;
+            font-size: 12px;
+            font-weight: 400;
+            padding: 10px 14px;
+            border-radius: 8px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 1000;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            border: 1px solid #e5e7eb;
+        }
+        .info-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: white;
+        }
+        .info-icon:hover .info-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Clear Button */
+        .clear-btn {
+            padding: 8px 14px;
+            background: transparent;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+        }
+        .clear-btn:hover {
+            background: #f5f5f5;
+            color: #666;
+            border-color: #ccc;
+        }
+        .clear-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Categories Toggle */
+        .categories-section {
+            background: white;
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+        }
+        .categories-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+        }
+        .categories-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .categories-toggle {
+            font-size: 12px;
+            color: #FF6600;
+            font-weight: 600;
+        }
+        .categories-list {
+            display: none;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #eee;
+        }
+        .categories-list.show {
+            display: flex;
+        }
+        .category-chip {
+            padding: 6px 14px;
+            background: #f5f5f5;
+            border: 1px solid #eee;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .category-chip:hover, .category-chip.active {
+            background: #FF6600;
+            border-color: #FF6600;
+            color: white;
+        }
+
+        /* Trades Table */
+        .trades-table-container {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .trades-table th {
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 500;
+            color: #9ca3af;
+            background: transparent;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .trades-table td {
+            padding: 14px 16px;
+            font-size: 14px;
+            color: #1a1a2e;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .trades-table tr:hover td {
+            background: #fafafa;
+        }
+        .trades-table tr {
+            cursor: pointer;
+        }
+
+        /* Table cells */
+        .trader-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .trader-address {
+            font-family: monospace;
+            font-size: 13px;
+            color: #1a1a2e;
+        }
+        .trader-link {
+            color: #999;
+            transition: color 0.2s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .trader-link:hover {
+            color: #FF6600;
+        }
+        .market-cell {
+            max-width: 300px;
+        }
+        .market-name {
+            font-weight: 500;
+            color: #1a1a2e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 280px;
+            display: block;
+        }
+        .market-outcome {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+        .market-outcome.yes {
+            color: #22c55e;
+        }
+        .market-outcome.no {
+            color: #ef4444;
+        }
+        .market-outcome.other {
+            color: #3b82f6;
+        }
+        .shares-cell {
+            font-weight: 600;
+        }
+        .investment-cell {
+            font-weight: 700;
+            color: #22c55e;
+        }
+        .price-cell {
+            color: #666;
+        }
+        .side-cell {
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .side-cell.buy {
+            color: #22c55e;
+        }
+        .side-cell.sell {
+            color: #ef4444;
+        }
+        .time-cell {
+            color: #888;
+            font-size: 13px;
+        }
+
+        /* Empty state - improved */
+        .table-empty {
+            padding: 80px 20px;
+            text-align: center;
+        }
+        .table-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .table-empty h3 {
+            color: #1a1a2e;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+        .table-empty p {
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .table-empty-btn {
+            padding: 10px 20px;
+            background: #FF6600;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .table-empty-btn:hover {
+            background: #e55a00;
+            transform: scale(1.02);
+        }
+
+        /* Stat Cards - Redesigned */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            transition: all 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        }
+        .stat-card-value {
+            font-size: 28px;
+            font-weight: 600;
+            color: #f97316;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stat-card-value .live-pulse {
+            width: 8px;
+            height: 8px;
+            background: #22c55e;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .stat-card-label {
+            font-size: 13px;
+            font-weight: 400;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        /* Buy/Sell Combined Card */
+        .stat-card.buy-sell {
+            display: flex;
+            flex-direction: column;
+        }
+        .buy-sell-values {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .buy-sell-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .buy-sell-item.buy .stat-card-value {
+            color: #22c55e;
+        }
+        .buy-sell-item.sell .stat-card-value {
+            color: #ef4444;
+        }
+        .buy-sell-item.sell {
+            text-align: right;
+        }
+        .buy-sell-bar {
+            height: 6px;
+            background: #f3f4f6;
+            border-radius: 3px;
+            overflow: hidden;
+            display: flex;
+        }
+        .buy-sell-bar-buy {
+            background: #22c55e;
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        .buy-sell-bar-sell {
+            background: #ef4444;
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        .buy-sell-percent {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        .buy-sell-percent span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .buy-sell-percent .dot-buy {
+            width: 6px;
+            height: 6px;
+            background: #22c55e;
+            border-radius: 50%;
+        }
+        .buy-sell-percent .dot-sell {
+            width: 6px;
+            height: 6px;
+            background: #ef4444;
+            border-radius: 50%;
+        }
+
+        /* Value update animation */
+        @keyframes valueUpdate {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .stat-card-value.updating {
+            animation: valueUpdate 0.3s ease;
+        }
+
+        /* Stats responsive */
+        @media (max-width: 900px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .stat-card.buy-sell {
+                grid-column: span 2;
+            }
+        }
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .stat-card.buy-sell {
+                grid-column: span 1;
+            }
+        }
+
+        /* Loading */
+        .table-loading {
+            padding: 60px 20px;
+            text-align: center;
+        }
+        .table-loading .spinner {
+            margin: 0 auto 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .trades-table-container {
+                overflow-x: auto;
+            }
+            .trades-table {
+                min-width: 800px;
+            }
+        }
+        @media (max-width: 768px) {
+            .filters-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .side-pills {
+                width: 100%;
+            }
+            .side-pill {
+                flex: 1;
+                text-align: center;
+            }
+            .filter-group {
+                width: 100%;
+            }
+            .filter-select, .filter-input {
+                flex: 1;
+            }
+            .filter-input.search {
+                width: 100%;
+            }
+            .filter-separator {
+                display: none;
+            }
+            .clear-btn {
+                margin-left: 0;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">Polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link">home</a>
+            <a href="/markets/" class="navbar-link">markets</a>
+            <a href="/alerts/" class="navbar-link">alerts</a>
+            <a href="/whales/" class="navbar-link active">whales</a>
+            <a href="/arbitrage/" class="navbar-link">arbitrage</a>
+            <a href="/roadmap/" class="navbar-link">roadmap</a>
+        </div>
+        <div class="navbar-right">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                @polydictions
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <h1 class="page-title">whale tracker</h1>
+                <p class="page-subtitle">track large trades on polymarket in real-time</p>
+            </div>
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                live updates
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-card-value" id="totalTrades">
+                    0
+                </div>
+                <div class="stat-card-label">whale trades</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-value" id="totalVolume">$0</div>
+                <div class="stat-card-label">whale volume</div>
+            </div>
+            <div class="stat-card buy-sell">
+                <div class="buy-sell-values">
+                    <div class="buy-sell-item buy">
+                        <div class="stat-card-value" id="buyVolume">$0</div>
+                        <div class="stat-card-label">buy volume</div>
+                    </div>
+                    <div class="buy-sell-item sell">
+                        <div class="stat-card-value" id="sellVolume">$0</div>
+                        <div class="stat-card-label">sell volume</div>
+                    </div>
+                </div>
+                <div class="buy-sell-bar">
+                    <div class="buy-sell-bar-buy" id="buyBar" style="width: 50%"></div>
+                    <div class="buy-sell-bar-sell" id="sellBar" style="width: 50%"></div>
+                </div>
+                <div class="buy-sell-percent">
+                    <span><span class="dot-buy"></span><span id="buyPercent">50%</span> buy</span>
+                    <span><span class="dot-sell"></span><span id="sellPercent">50%</span> sell</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Filters - Compact One Line -->
+        <div class="quick-filters">
+            <div class="filters-row">
+                <!-- Side Pills -->
+                <div class="side-pills">
+                    <button class="side-pill active" data-side="all">all trades</button>
+                    <button class="side-pill" data-side="buy">buys only</button>
+                    <button class="side-pill" data-side="sell">sells only</button>
+                </div>
+
+                <div class="filter-separator"></div>
+
+                <!-- Min Size Slider -->
+                <div class="filter-group">
+                    <span class="filter-label">min size:</span>
+                    <div class="size-slider-group">
+                        <input type="range" class="size-slider" id="filterMinSize" min="1" max="100" value="5" step="1">
+                        <span class="size-value" id="sizeValue">$5K+</span>
+                    </div>
+                </div>
+
+                <div class="filter-separator"></div>
+
+                <!-- Search -->
+                <div class="filter-group">
+                    <input type="text" class="filter-input search" id="filterSearch" placeholder="search markets...">
+                </div>
+
+                <div class="filter-separator"></div>
+
+                <!-- Price Range -->
+                <div class="filter-group">
+                    <span class="filter-label">price:</span>
+                    <div class="price-range">
+                        <input type="number" class="filter-input" id="filterMinPrice" placeholder="0.01" step="0.01" min="0" max="1">
+                        <span class="price-range-separator">—</span>
+                        <input type="number" class="filter-input" id="filterMaxPrice" placeholder="0.99" step="0.01" min="0" max="1">
+                    </div>
+                </div>
+
+                <div class="filter-separator"></div>
+
+                <!-- Insider Mode Toggle -->
+                <div class="toggle-group">
+                    <div class="toggle-switch" id="firstTradeToggle"></div>
+                    <span class="toggle-label">insider mode</span>
+                    <div class="info-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/>
+                        </svg>
+                        <div class="info-tooltip">insider mode shows new accounts with high bets which are probably insiders</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Categories -->
+        <div class="categories-section">
+            <div class="categories-header" id="categoriesToggle">
+                <span class="categories-title">categories</span>
+                <span class="categories-toggle">show</span>
+            </div>
+            <div class="categories-list" id="categoriesList">
+                <span class="category-chip active" data-category="all">all</span>
+                <span class="category-chip" data-category="politics">politics</span>
+                <span class="category-chip" data-category="sports">sports</span>
+                <span class="category-chip" data-category="crypto">crypto</span>
+                <span class="category-chip" data-category="finance">finance</span>
+                <span class="category-chip" data-category="tech">tech</span>
+                <span class="category-chip" data-category="culture">culture</span>
+            </div>
+        </div>
+
+        <!-- Trades Table -->
+        <div class="trades-table-container">
+            <table class="trades-table">
+                <thead>
+                    <tr>
+                        <th>trader</th>
+                        <th>market</th>
+                        <th>shares</th>
+                        <th>investment</th>
+                        <th>price</th>
+                        <th>side</th>
+                        <th>time</th>
+                    </tr>
+                </thead>
+                <tbody id="tradesTableBody">
+                    <tr>
+                        <td colspan="7">
+                            <div class="table-loading">
+                                <div class="spinner"></div>
+                                <div style="color: #888;">loading trades...</div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2025 polydictions. prediction markets intelligence</p>
+    </footer>
+
+    <script src="/js/api.js"></script>
+    <script>
+        // State
+        let allTrades = [];
+        let filteredTrades = [];
+        let filters = {
+            side: 'all',
+            minInvestment: 5000,
+            search: '',
+            minPrice: null,
+            maxPrice: null,
+            category: 'all',
+            firstTradeOnly: false
+        };
+        let isLoading = false;
+        let categoriesVisible = false;
+
+        // Fetch whale trades
+        async function fetchWhaleTrades() {
+            try {
+                isLoading = true;
+                if (allTrades.length === 0) {
+                    showLoading();
+                }
+
+                const firstTradeParam = filters.firstTradeOnly ? '&first_trade_only=true' : '';
+                const apiBase = window.location.hostname === 'localhost'
+                    ? 'http://localhost:8765'
+                    : 'https://polydictions-production.up.railway.app';
+                const response = await fetch(`${apiBase}/api/whales?min=${filters.minInvestment}&limit=200${firstTradeParam}`);
+                const data = await response.json();
+
+                if (data.success && data.trades) {
+                    if (data.trades.length > 0 || allTrades.length === 0) {
+                        allTrades = data.trades;
+                    }
+                    console.log(`Loaded ${allTrades.length} whale trades`);
+                }
+            } catch (error) {
+                console.error('Error fetching whale trades:', error);
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('tradesTableBody').innerHTML = `
+                <tr>
+                    <td colspan="7">
+                        <div class="table-loading">
+                            <div class="spinner"></div>
+                            <div style="color: #888;">loading trades...</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await fetchWhaleTrades();
+            filterAndRender();
+            updateStats();
+            setupEventListeners();
+
+            // Refresh every 30 seconds
+            setInterval(async () => {
+                await fetchWhaleTrades();
+                filterAndRender();
+                updateStats();
+            }, 30000);
+        });
+
+        function filterAndRender() {
+            filteredTrades = allTrades.filter(trade => {
+                // Side filter
+                if (filters.side !== 'all' && trade.side !== filters.side) return false;
+
+                // Search filter
+                if (filters.search && !trade.market.toLowerCase().includes(filters.search.toLowerCase())) return false;
+
+                // Price filters (price is in cents, convert to decimal)
+                const priceDecimal = trade.price / 100;
+                if (filters.minPrice !== null && priceDecimal < filters.minPrice) return false;
+                if (filters.maxPrice !== null && priceDecimal > filters.maxPrice) return false;
+
+                // Category filter
+                if (filters.category !== 'all') {
+                    const category = utils.classifyCategory({ title: trade.market, tags: [] });
+                    if (category !== filters.category) return false;
+                }
+
+                return true;
+            });
+
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tradesTableBody');
+
+            if (filteredTrades.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7">
+                            <div class="table-empty">
+                                <div class="table-empty-icon">🐋</div>
+                                <h3>no whale trades found</h3>
+                                <p>try lowering min investment or adjusting filters</p>
+                                <button class="table-empty-btn" onclick="resetFilters()">reset filters</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = filteredTrades.slice(0, 100).map(trade => {
+                const outcomeLower = trade.outcome.toLowerCase();
+                const outcomeClass = outcomeLower === 'yes' ? 'yes' : outcomeLower === 'no' ? 'no' : 'other';
+                const sideClass = trade.side === 'buy' ? 'buy' : 'sell';
+                const shares = trade.size || (trade.amount / (trade.price / 100));
+                const marketUrl = trade.event_slug
+                    ? `https://polymarket.com/event/${trade.event_slug}`
+                    : `https://polymarket.com/markets?_q=${encodeURIComponent(trade.market)}`;
+                const profileUrl = `https://polymarket.com/profile/${trade.user}?via=polydictions`;
+                // Use short address if name looks like an address or is too long
+                const rawName = trade.name || '';
+                const isAddressLike = rawName.startsWith('0x') || rawName.length > 20 || rawName.includes('-');
+                const traderName = (rawName && !isAddressLike) ? rawName : trade.user_short;
+
+                return `
+                    <tr data-market-url="${marketUrl}">
+                        <td>
+                            <div class="trader-cell" onclick="event.stopPropagation();">
+                                <span class="trader-address" title="${trade.user}">${traderName}</span>
+                                <a href="${profileUrl}" target="_blank" class="trader-link" title="View profile on Polymarket">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                                        <polyline points="15 3 21 3 21 9"></polyline>
+                                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                                    </svg>
+                                </a>
+                            </div>
+                        </td>
+                        <td class="market-cell">
+                            <span class="market-name" title="${trade.market}">${trade.market}</span>
+                            <div class="market-outcome ${outcomeClass}">${trade.outcome}</div>
+                        </td>
+                        <td class="shares-cell">${formatNumber(shares)}</td>
+                        <td class="investment-cell">${utils.formatCurrency(trade.amount)}</td>
+                        <td class="price-cell">${trade.price % 1 === 0 ? trade.price.toFixed(0) : trade.price}¢</td>
+                        <td class="side-cell ${sideClass}">${trade.side.toUpperCase()}</td>
+                        <td class="time-cell">${formatTime(trade.timestamp)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            // Add click handlers for rows
+            tbody.querySelectorAll('tr[data-market-url]').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    if (!e.target.closest('.trader-cell')) {
+                        window.open(row.dataset.marketUrl, '_blank');
+                    }
+                });
+            });
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toFixed(0);
+        }
+
+        function formatTime(timestamp) {
+            const diff = Date.now() - timestamp;
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+
+            if (seconds < 60) return `${seconds}s`;
+            if (minutes < 60) return `${minutes}m`;
+            if (hours < 24) return `${hours}h`;
+            return new Date(timestamp).toLocaleDateString();
+        }
+
+        function updateStats() {
+            const total = allTrades.length;
+            const totalVol = allTrades.reduce((sum, t) => sum + t.amount, 0);
+            const buyVol = allTrades.filter(t => t.side === 'buy').reduce((sum, t) => sum + t.amount, 0);
+            const sellVol = allTrades.filter(t => t.side === 'sell').reduce((sum, t) => sum + t.amount, 0);
+
+            // Calculate percentages
+            const totalBuySell = buyVol + sellVol;
+            const buyPercent = totalBuySell > 0 ? Math.round((buyVol / totalBuySell) * 100) : 50;
+            const sellPercent = 100 - buyPercent;
+
+            // Update values with animation
+            const totalTradesEl = document.getElementById('totalTrades');
+            const livePulse = totalTradesEl.querySelector('.live-pulse');
+            totalTradesEl.innerHTML = total + (livePulse ? '<span class="live-pulse" title="live updates"></span>' : '');
+
+            document.getElementById('totalVolume').textContent = utils.formatCurrency(totalVol);
+            document.getElementById('buyVolume').textContent = utils.formatCurrency(buyVol);
+            document.getElementById('sellVolume').textContent = utils.formatCurrency(sellVol);
+
+            // Update progress bar
+            document.getElementById('buyBar').style.width = buyPercent + '%';
+            document.getElementById('sellBar').style.width = sellPercent + '%';
+            document.getElementById('buyPercent').textContent = buyPercent + '%';
+            document.getElementById('sellPercent').textContent = sellPercent + '%';
+        }
+
+        async function resetFilters() {
+            filters = {
+                side: 'all',
+                minInvestment: 5000,
+                search: '',
+                minPrice: null,
+                maxPrice: null,
+                category: 'all',
+                firstTradeOnly: false
+            };
+
+            // Reset UI
+            document.querySelectorAll('.side-pill').forEach(p => p.classList.remove('active'));
+            document.querySelector('.side-pill[data-side="all"]').classList.add('active');
+            document.getElementById('filterMinSize').value = '5';
+            document.getElementById('sizeValue').textContent = '$5K+';
+            document.getElementById('filterSearch').value = '';
+            document.getElementById('filterMinPrice').value = '';
+            document.getElementById('filterMaxPrice').value = '';
+            document.getElementById('firstTradeToggle').classList.remove('active');
+            document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('.category-chip[data-category="all"]').classList.add('active');
+
+            await fetchWhaleTrades();
+            filterAndRender();
+            updateStats();
+        }
+
+        function setupEventListeners() {
+            // Side pills
+            document.querySelectorAll('.side-pill').forEach(pill => {
+                pill.addEventListener('click', () => {
+                    document.querySelectorAll('.side-pill').forEach(p => p.classList.remove('active'));
+                    pill.classList.add('active');
+                    filters.side = pill.dataset.side;
+                    filterAndRender();
+                });
+            });
+
+            // Min size slider ($1K steps)
+            function formatSizeLabel(value) {
+                return `$${value}K+`;
+            }
+
+            function updateSizeLabel(value) {
+                document.getElementById('sizeValue').textContent = formatSizeLabel(value);
+            }
+
+            document.getElementById('filterMinSize').addEventListener('input', (e) => {
+                updateSizeLabel(parseInt(e.target.value));
+            });
+
+            document.getElementById('filterMinSize').addEventListener('change', async (e) => {
+                const value = parseInt(e.target.value);
+                filters.minInvestment = value * 1000;  // Convert to dollars
+                await fetchWhaleTrades();
+                filterAndRender();
+                updateStats();
+            });
+
+            // Search
+            document.getElementById('filterSearch').addEventListener('input', utils.debounce((e) => {
+                filters.search = e.target.value;
+                filterAndRender();
+            }, 300));
+
+            // Min price with validation
+            document.getElementById('filterMinPrice').addEventListener('change', (e) => {
+                let val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                    val = Math.max(0.01, Math.min(0.99, val));
+                    e.target.value = val;
+                    filters.minPrice = val;
+                } else {
+                    e.target.value = '';
+                    filters.minPrice = null;
+                }
+                filterAndRender();
+            });
+
+            // Max price with validation
+            document.getElementById('filterMaxPrice').addEventListener('change', (e) => {
+                let val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                    val = Math.max(0.01, Math.min(0.99, val));
+                    e.target.value = val;
+                    filters.maxPrice = val;
+                } else {
+                    e.target.value = '';
+                    filters.maxPrice = null;
+                }
+                filterAndRender();
+            });
+
+            // First trade toggle
+            document.getElementById('firstTradeToggle').addEventListener('click', async () => {
+                const toggle = document.getElementById('firstTradeToggle');
+                toggle.classList.toggle('active');
+                filters.firstTradeOnly = toggle.classList.contains('active');
+
+                // Show loading state
+                showLoading();
+
+                await fetchWhaleTrades();
+                filterAndRender();
+                updateStats();
+            });
+
+            // Categories toggle
+            document.getElementById('categoriesToggle').addEventListener('click', () => {
+                categoriesVisible = !categoriesVisible;
+                document.getElementById('categoriesList').classList.toggle('show', categoriesVisible);
+                document.querySelector('.categories-toggle').textContent = categoriesVisible ? 'hide' : 'show';
+            });
+
+            // Category chips
+            document.querySelectorAll('.category-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    filters.category = chip.dataset.category;
+                    filterAndRender();
+                });
+            });
+        }
+    </script>
+</body>
+</html>
