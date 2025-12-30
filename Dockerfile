@@ -8,10 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY launchpad_server.py .
-COPY .env .
 
 # Expose port
 EXPOSE 5777
 
-# Run
-CMD ["uvicorn", "launchpad_server:app", "--host", "0.0.0.0", "--port", "5777"]
+# Run (PORT is set by Railway)
+CMD ["sh", "-c", "uvicorn launchpad_server:app --host 0.0.0.0 --port ${PORT:-5777}"]
