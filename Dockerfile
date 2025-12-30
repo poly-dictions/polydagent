@@ -6,11 +6,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application
-COPY launchpad_server.py .
+# Copy application files
+COPY api_server.py .
+COPY features/ ./features/
 
 # Expose port
 EXPOSE 5777
 
 # Run (PORT is set by Railway)
-CMD sh -c "uvicorn launchpad_server:app --host 0.0.0.0 --port $PORT"
+CMD ["python", "api_server.py"]
