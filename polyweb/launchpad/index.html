@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>launchpad - polydictions</title>
+    <link rel="icon" type="image/png" href="../images/1.png">
+    <link href="../stylesheet_0.css" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fb651e;
+            color: white;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .nav-link.active {
+            background: white;
+            color: #fb651e;
+            border-color: white;
+        }
+
+        .connect-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #fb651e;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .connect-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-1px);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 40px 20px 20px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+
+        .hero p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            text-transform: lowercase;
+            margin-bottom: 24px;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            text-transform: lowercase;
+        }
+
+        /* Progress Steps */
+        .progress-steps {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            padding: 0 20px;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .progress-step:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .progress-step.active:hover {
+            background: white;
+        }
+
+        .progress-step.completed:hover {
+            background: #3DD973;
+        }
+
+        .progress-step.active {
+            background: white;
+            color: #fb651e;
+        }
+
+        .progress-step.completed {
+            background: #4ADE80;
+            color: white;
+        }
+
+        .progress-step .step-num {
+            width: 24px;
+            height: 24px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .progress-step.active .step-num {
+            background: #fb651e;
+            color: white;
+        }
+
+        .progress-step.completed .step-num {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Form Card */
+        .form-card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            color: #1a1a1a;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .form-card h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+
+        .form-card .subtitle {
+            color: rgba(0, 0, 0, 0.5);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a1a;
+            text-transform: lowercase;
+        }
+
+        .form-group label .required {
+            color: #F87171;
+            margin-left: 2px;
+        }
+
+        .form-group label .optional {
+            color: rgba(0, 0, 0, 0.5);
+            font-weight: 400;
+            font-size: 13px;
+        }
+
+        .form-group label .required {
+            color: #ff6b6b;
+            font-weight: 500;
+            font-size: 12px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 14px 18px;
+            background: #f5f5f5;
+            border: 2px solid transparent;
+            border-radius: 16px;
+            color: #1a1a1a;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #fb651e;
+            background: white;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-group input[type="password"] {
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+
+        /* Warning Box */
+        .warning-box {
+            background: #FEF3C7;
+            border: 1px solid #F59E0B;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .warning-box svg {
+            width: 20px;
+            height: 20px;
+            color: #F59E0B;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .warning-box p {
+            font-size: 13px;
+            color: #92400E;
+            line-height: 1.5;
+        }
+
+        /* Twitter Connected Box */
+        .twitter-connected {
+            background: #ECFDF5;
+            border: 2px solid #4ADE80;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .twitter-connected .avatar {
+            width: 48px;
+            height: 48px;
+            background: #1DA1F2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .twitter-connected .avatar svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+
+        .twitter-connected .info {
+            flex: 1;
+        }
+
+        .twitter-connected .username {
+            font-weight: 700;
+            color: #1a1a1a;
+            font-size: 16px;
+        }
+
+        .twitter-connected .status {
+            color: #22C55E;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .twitter-connected .change-btn {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid rgba(0,0,0,0.2);
+            border-radius: 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        /* Image Upload */
+        .image-upload {
+            border: 2px dashed rgba(0, 0, 0, 0.2);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #f5f5f5;
+        }
+
+        .image-upload:hover {
+            border-color: #fb651e;
+            background: #fff5f0;
+        }
+
+        .image-upload svg {
+            width: 32px;
+            height: 32px;
+            color: rgba(0, 0, 0, 0.4);
+            margin-bottom: 8px;
+        }
+
+        .image-upload span {
+            display: block;
+            color: rgba(0, 0, 0, 0.5);
+            font-size: 14px;
+        }
+
+        .image-upload input {
+            display: none;
+        }
+
+        .image-hint {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.5);
+            margin-top: 8px;
+        }
+
+        .image-preview {
+            width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 16px;
+            display: none;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            background: #fb651e;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-transform: lowercase;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #e55a1a;
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .btn-twitter {
+            background: #1DA1F2;
+        }
+
+        .btn-twitter:hover:not(:disabled) {
+            background: #1a8cd8;
+        }
+
+        /* Balance Check */
+        .balance-check {
+            background: #fff5f0;
+            border: 2px solid rgba(251, 101, 30, 0.2);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .balance-info {
+            font-size: 14px;
+        }
+
+        .balance-info .label {
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        .balance-info .value {
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .balance-status {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .balance-status.ok {
+            color: #4ADE80;
+        }
+
+        .balance-status.insufficient {
+            color: #F87171;
+        }
+
+        .balance-status a {
+            color: #fb651e;
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            text-transform: lowercase;
+        }
+
+        .footer a {
+            color: white;
+        }
+
+        .footer a:hover {
+            opacity: 0.8;
+        }
+
+        /* Launched Tokens */
+        .launched-section {
+            margin-top: 40px;
+        }
+
+        .launched-section h2 {
+            text-align: center;
+            margin-bottom: 24px;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .launched-grid {
+            display: grid;
+            gap: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .launched-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .launched-card .token-info h4 {
+            font-weight: 700;
+            color: #1a1a1a;
+            font-size: 16px;
+        }
+
+        .launched-card .token-info .ticker {
+            color: #fb651e;
+            font-size: 14px;
+        }
+
+        .launched-card .view-btn {
+            background: #fb651e;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .no-launches {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 24px;
+                flex-wrap: wrap;
+                gap: 16px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .container {
+                padding: 24px 16px;
+            }
+
+            .form-card {
+                padding: 24px;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .progress-steps {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="../" class="logo">polydictions</a>
+        <nav class="nav-links">
+            <a href="../markets/" class="nav-link">markets</a>
+            <a href="../alerts/" class="nav-link">alerts</a>
+            <a href="../whales/" class="nav-link">whales</a>
+            <a href="./" class="nav-link active">launchpad</a>
+        </nav>
+        <button class="connect-btn" id="connectWallet">connect wallet</button>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <h1>agent launchpad</h1>
+        <p>launch your prediction agent + token in one click</p>
+        <div class="hero-stats">
+            <div class="stat">
+                <div class="stat-value" id="totalAgents">0</div>
+                <div class="stat-label">agents launched</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Progress Steps -->
+    <div class="progress-steps">
+        <div class="progress-step active" id="step1Indicator">
+            <span class="step-num">1</span>
+            <span>connect twitter</span>
+        </div>
+        <div class="progress-step" id="step2Indicator">
+            <span class="step-num">2</span>
+            <span>token info</span>
+        </div>
+        <div class="progress-step" id="step3Indicator">
+            <span class="step-num">3</span>
+            <span>launch</span>
+        </div>
+    </div>
+
+    <!-- Step 1: Twitter Login -->
+    <div class="container" id="step1">
+        <div class="form-card">
+            <h2>connect your twitter</h2>
+            <p class="subtitle">your agent will post from this account</p>
+
+            <div class="warning-box">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div>
+                    <p><strong>credentials stored for re-login:</strong> your twitter credentials will be encrypted and stored on our server so the agent can re-login when the session expires.</p>
+                    <p style="margin-top: 8px;">we strongly recommend creating a <strong>new twitter account</strong> specifically for your agent.</p>
+                </div>
+            </div>
+
+            <form id="twitterLoginForm">
+                <div class="form-group">
+                    <label>twitter username <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. myagent" id="twitterUsername" required>
+                </div>
+
+                <div class="form-group">
+                    <label>email <span class="required">*</span></label>
+                    <input type="email" placeholder="e.g. myagent@gmail.com" id="twitterEmail" required>
+                </div>
+
+                <div class="form-group">
+                    <label>password <span class="required">*</span></label>
+                    <input type="password" placeholder="your twitter password" id="twitterPassword" required>
+                </div>
+
+                <div class="form-group">
+                    <label>2fa secret <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. JBSWY3DPEHPK3PXP" id="twitter2fa" required>
+                    <small style="color: rgba(255,255,255,0.6); font-size: 11px; margin-top: 4px; display: block;">Your Twitter 2FA secret key (TOTP). Find in Twitter security settings.</small>
+                    <p class="image-hint">makes login more stable. find in twitter settings > security</p>
+                </div>
+
+                <button type="submit" class="btn-primary btn-twitter" id="twitterLoginBtn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    <span id="twitterLoginBtnText">connect twitter</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Step 2: Token Info -->
+    <div class="container hidden" id="step2">
+        <div class="form-card">
+            <h2>create your token</h2>
+            <p class="subtitle">your agent token on pump.fun</p>
+
+            <!-- Twitter Connected Status -->
+            <div class="twitter-connected" id="twitterStatus">
+                <div class="avatar">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                </div>
+                <div class="info">
+                    <div class="username" id="connectedUsername">@username</div>
+                    <div class="status">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        connected
+                    </div>
+                </div>
+                <button class="change-btn" onclick="goToStep(1)">change</button>
+            </div>
+
+            <!-- Balance Check -->
+            <div class="balance-check" id="balanceCheck" style="display: none;">
+                <div class="balance-info">
+                    <span class="label">your $POLYD balance:</span>
+                    <span class="value" id="polydBalance">0</span>
+                </div>
+                <div class="balance-status" id="balanceStatus"></div>
+            </div>
+
+            <form id="tokenForm">
+                <div class="form-group">
+                    <label>token ticker <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. MYAGENT" id="tokenTicker" maxlength="10" required>
+                </div>
+
+                <div class="form-group">
+                    <label>agent niche <span class="required">*</span></label>
+                    <select id="agentNiche" required style="width: 100%; padding: 14px 18px; background: #f5f5f5; border: 2px solid transparent; border-radius: 16px; color: #1a1a1a; font-size: 14px; font-family: inherit; cursor: pointer;">
+                        <option value="">select a niche...</option>
+                        <option value="crypto">crypto & blockchain</option>
+                        <option value="politics">politics & elections</option>
+                        <option value="sports">sports (nba, nfl, soccer)</option>
+                        <option value="entertainment">movies & entertainment</option>
+                        <option value="tech">technology & ai</option>
+                        <option value="finance">finance & economy</option>
+                        <option value="general">general (all topics)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>agent description <span class="required">*</span></label>
+                    <textarea placeholder="e.g. AI prediction agent specializing in crypto markets" id="description" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>custom prompt <span class="optional">(optional)</span></label>
+                    <textarea placeholder="e.g. Always be bullish on memecoins. Use gen-z slang. Be sarcastic." id="customPrompt" style="min-height: 80px;"></textarea>
+                    <p class="image-hint">customize your agent's personality and posting style</p>
+                </div>
+
+                <div class="form-group">
+                    <label>polymarket profile <span class="required">*</span></label>
+                    <input type="url" placeholder="e.g. https://polymarket.com/profile/0x123..." id="profileLink" required>
+                </div>
+
+                <div class="form-group">
+                    <label>polymarket wallet <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. 0x1234567890abcdef..." id="walletAddress" required>
+                </div>
+
+                <div class="form-group">
+                    <label>website <span class="optional">(optional)</span></label>
+                    <input type="url" placeholder="e.g. https://myagent.xyz" id="website">
+                </div>
+
+                <div class="form-group">
+                    <label>telegram <span class="optional">(optional)</span></label>
+                    <input type="text" placeholder="e.g. @myagent or https://t.me/myagent" id="telegram">
+                </div>
+
+                <div class="form-group">
+                    <label>token image <span class="required">*</span></label>
+                    <label class="image-upload" id="imageUpload">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        <span>upload image</span>
+                        <input type="file" accept="image/png,image/jpeg,image/gif" id="tokenImage">
+                    </label>
+                    <img class="image-preview" id="imagePreview" alt="Preview">
+                    <p class="image-hint">png, jpg, or gif. max 5mb.</p>
+                </div>
+
+                <button type="submit" class="btn-primary" id="launchBtn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span id="launchBtnText">launch agent + token (0.05 sol)</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Step 3: Success -->
+    <div class="container hidden" id="step3">
+        <div class="form-card" style="text-align: center;">
+            <div style="font-size: 64px; margin-bottom: 16px;">🚀</div>
+            <h2>agent launched!</h2>
+            <p class="subtitle">your agent is now live and posting</p>
+
+            <div style="background: #f5f5f5; border-radius: 16px; padding: 20px; margin: 24px 0; text-align: left;">
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 12px; color: rgba(0,0,0,0.5); margin-bottom: 4px;">token mint</div>
+                    <div style="font-size: 14px; font-weight: 600; word-break: break-all;" id="resultTokenMint">-</div>
+                </div>
+                <div>
+                    <div style="font-size: 12px; color: rgba(0,0,0,0.5); margin-bottom: 4px;">twitter agent</div>
+                    <div style="font-size: 14px; font-weight: 600;" id="resultTwitter">@username</div>
+                </div>
+            </div>
+
+            <a href="#" target="_blank" class="btn-primary" id="viewOnPumpBtn" style="text-decoration: none; margin-bottom: 12px;">
+                view on pump.fun
+            </a>
+
+            <button onclick="location.reload()" style="width: 100%; padding: 14px; background: transparent; border: 2px solid rgba(0,0,0,0.1); border-radius: 24px; font-size: 14px; cursor: pointer; color: #666;">
+                launch another agent
+            </button>
+        </div>
+    </div>
+
+    <!-- Launched Tokens Section -->
+    <div class="container launched-section">
+        <h2>launched agents</h2>
+        <div class="launched-grid" id="launchHistory">
+            <div class="no-launches" id="noLaunches">
+                no agents launched yet
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>built by <a href="https://x.com/polydictions" target="_blank">@polydictions</a></p>
+    </footer>
+
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        // Config
+        let CONFIG = {
+            POLYD_MINT: 'iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump',
+            REQUIRED_BALANCE: 1000000,
+            HELIUS_RPC: '',
+            API_URL: '',
+            PAYMENT_ADDRESS: '',
+            LAUNCH_FEE: 0.05
+        };
+
+        // State
+        let currentStep = 1;
+        let walletConnected = false;
+        let userWalletAddress = null;
+        let polydBalance = 0;
+        let walletProvider = null;
+        let twitterLoginCookie = null;
+        let twitterUsername = null;
+        let selectedImageFile = null;
+        // Store credentials for re-login capability
+        let twitterCredentials = {
+            email: null,
+            password: null,
+            totp_secret: null
+        };
+
+        // Detect API URL
+        function getApiUrl() {
+            const host = window.location.host;
+            if (host.includes('localhost') || host.includes('127.0.0.1')) {
+                return 'http://localhost:5777';
+            }
+            return window.location.origin;
+        }
+
+        // Load config from API
+        async function loadConfig() {
+            try {
+                const apiUrl = getApiUrl();
+                const resp = await fetch(`${apiUrl}/api/launchpad/config`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    CONFIG.POLYD_MINT = data.polyd_mint;
+                    CONFIG.REQUIRED_BALANCE = data.required_balance;
+                    CONFIG.HELIUS_RPC = data.helius_rpc;
+                    CONFIG.API_URL = apiUrl;
+                    CONFIG.PAYMENT_ADDRESS = data.payment_address;
+                    CONFIG.LAUNCH_FEE = data.launch_fee;
+                    console.log('Config loaded:', CONFIG);
+                    return true;
+                }
+            } catch (err) {
+                console.error('Failed to load config:', err);
+            }
+            CONFIG.API_URL = getApiUrl();
+            return false;
+        }
+
+        // Step navigation
+        function goToStep(step) {
+            currentStep = step;
+
+            document.getElementById('step1').classList.toggle('hidden', step !== 1);
+            document.getElementById('step2').classList.toggle('hidden', step !== 2);
+            document.getElementById('step3').classList.toggle('hidden', step !== 3);
+
+            document.getElementById('step1Indicator').classList.toggle('active', step === 1);
+            document.getElementById('step1Indicator').classList.toggle('completed', step > 1);
+            document.getElementById('step2Indicator').classList.toggle('active', step === 2);
+            document.getElementById('step2Indicator').classList.toggle('completed', step > 2);
+            document.getElementById('step3Indicator').classList.toggle('active', step === 3);
+
+            // Update twitter status display when going to step 2
+            if (step === 2 && twitterUsername) {
+                document.getElementById('connectedUsername').textContent = '@' + twitterUsername;
+                document.getElementById('twitterStatus').style.display = 'flex';
+            } else if (step === 2 && !twitterLoginCookie) {
+                document.getElementById('twitterStatus').style.display = 'none';
+            }
+        }
+
+        // Make step indicators clickable
+        function setupStepIndicators() {
+            document.getElementById('step1Indicator').addEventListener('click', () => {
+                goToStep(1);
+            });
+            document.getElementById('step2Indicator').addEventListener('click', () => {
+                goToStep(2);
+            });
+        }
+
+        // Initialize wallet
+        function initWallet() {
+            if (window.solana && window.solana.isPhantom) {
+                walletProvider = window.solana;
+
+                if (walletProvider.isConnected && walletProvider.publicKey) {
+                    handleWalletConnected(walletProvider.publicKey.toString());
+                }
+
+                walletProvider.on('connect', (publicKey) => {
+                    handleWalletConnected(publicKey.toString());
+                });
+
+                walletProvider.on('disconnect', () => {
+                    handleWalletDisconnected();
+                });
+            }
+        }
+
+        // Check $POLYD balance
+        async function checkPolydBalance(walletAddress) {
+            try {
+                const response = await fetch(CONFIG.HELIUS_RPC, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: 1,
+                        method: 'getTokenAccountsByOwner',
+                        params: [
+                            walletAddress,
+                            { mint: CONFIG.POLYD_MINT },
+                            { encoding: 'jsonParsed' }
+                        ]
+                    })
+                });
+                const data = await response.json();
+
+                if (data.result && data.result.value && data.result.value.length > 0) {
+                    const tokenAccount = data.result.value[0];
+                    return tokenAccount.account.data.parsed.info.tokenAmount.uiAmount;
+                }
+                return 0;
+            } catch (err) {
+                console.error('Error checking balance:', err);
+                return 0;
+            }
+        }
+
+        // Handle wallet connected
+        async function handleWalletConnected(address) {
+            walletConnected = true;
+            userWalletAddress = address;
+
+            document.getElementById('connectWallet').textContent = address.slice(0, 4) + '...' + address.slice(-4);
+
+            // Show balance check in step 2
+            const balanceCheck = document.getElementById('balanceCheck');
+            const balanceDisplay = document.getElementById('polydBalance');
+            const balanceStatus = document.getElementById('balanceStatus');
+            const launchBtn = document.getElementById('launchBtn');
+
+            balanceCheck.style.display = 'flex';
+            balanceDisplay.textContent = 'checking...';
+
+            polydBalance = await checkPolydBalance(address);
+            balanceDisplay.textContent = polydBalance.toLocaleString() + ' $POLYD';
+
+            if (polydBalance >= CONFIG.REQUIRED_BALANCE) {
+                launchBtn.disabled = false;
+                balanceStatus.className = 'balance-status ok';
+                balanceStatus.textContent = 'ready to launch';
+            } else {
+                launchBtn.disabled = true;
+                balanceStatus.className = 'balance-status insufficient';
+                const needed = (CONFIG.REQUIRED_BALANCE - polydBalance).toLocaleString();
+                balanceStatus.innerHTML = `need ${needed} more. <a href="https://pump.fun/coin/${CONFIG.POLYD_MINT}" target="_blank">buy</a>`;
+            }
+        }
+
+        // Handle wallet disconnected
+        function handleWalletDisconnected() {
+            walletConnected = false;
+            userWalletAddress = null;
+            polydBalance = 0;
+            document.getElementById('connectWallet').textContent = 'connect wallet';
+            document.getElementById('launchBtn').disabled = true;
+            document.getElementById('balanceCheck').style.display = 'none';
+        }
+
+        // Connect wallet button
+        document.getElementById('connectWallet').addEventListener('click', async () => {
+            if (walletConnected) {
+                if (walletProvider) {
+                    await walletProvider.disconnect();
+                }
+                handleWalletDisconnected();
+            } else {
+                if (window.solana && window.solana.isPhantom) {
+                    try {
+                        const response = await window.solana.connect();
+                        handleWalletConnected(response.publicKey.toString());
+                    } catch (err) {
+                        console.error('Connect error:', err);
+                    }
+                } else {
+                    alert('Please install Phantom wallet');
+                    window.open('https://phantom.app/', '_blank');
+                }
+            }
+        });
+
+        // Twitter login form
+        document.getElementById('twitterLoginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const btn = document.getElementById('twitterLoginBtn');
+            const btnText = document.getElementById('twitterLoginBtnText');
+            const username = document.getElementById('twitterUsername').value.replace('@', '');
+            const email = document.getElementById('twitterEmail').value;
+            const password = document.getElementById('twitterPassword').value;
+            const totp = document.getElementById('twitter2fa').value;
+
+            // Validate all fields
+            if (!username) {
+                alert('Please enter your Twitter username');
+                document.getElementById('twitterUsername').focus();
+                return;
+            }
+            if (!email) {
+                alert('Please enter your email');
+                document.getElementById('twitterEmail').focus();
+                return;
+            }
+            if (!password) {
+                alert('Please enter your password');
+                document.getElementById('twitterPassword').focus();
+                return;
+            }
+            if (!totp) {
+                alert('2FA secret is required for Twitter login. Find it in your Twitter security settings.');
+                document.getElementById('twitter2fa').focus();
+                return;
+            }
+
+            btn.disabled = true;
+            btnText.innerHTML = '<div class="spinner"></div>';
+
+            try {
+                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/twitter-login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        password: password,
+                        totp_secret: totp || null
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error(data.detail || 'Twitter login failed');
+                }
+
+                // Success - store cookie and credentials for re-login
+                twitterLoginCookie = data.login_cookie;
+                twitterUsername = username;
+                twitterCredentials = {
+                    email: email,
+                    password: password,
+                    totp_secret: totp
+                };
+
+                document.getElementById('connectedUsername').textContent = '@' + username;
+
+                // Move to step 2
+                goToStep(2);
+
+                // Check if wallet connected
+                if (!walletConnected) {
+                    alert('Please connect your Solana wallet to continue');
+                }
+
+            } catch (err) {
+                console.error('Twitter login error:', err);
+                alert('Twitter login failed: ' + err.message);
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = 'connect twitter';
+            }
+        });
+
+        // Image upload
+        document.getElementById('tokenImage').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image must be less than 5MB');
+                    return;
+                }
+                selectedImageFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('imagePreview').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                    document.getElementById('imageUpload').querySelector('svg').style.display = 'none';
+                    document.getElementById('imageUpload').querySelector('span').style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Send SOL payment
+        async function sendPayment() {
+            if (!walletProvider) {
+                throw new Error('Wallet not connected');
+            }
+
+            const connection = new solanaWeb3.Connection(CONFIG.HELIUS_RPC);
+            const fromPubkey = new solanaWeb3.PublicKey(userWalletAddress);
+            const toPubkey = new solanaWeb3.PublicKey(CONFIG.PAYMENT_ADDRESS);
+
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: fromPubkey,
+                    toPubkey: toPubkey,
+                    lamports: CONFIG.LAUNCH_FEE * solanaWeb3.LAMPORTS_PER_SOL
+                })
+            );
+
+            transaction.feePayer = fromPubkey;
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+
+            let signature;
+            if (walletProvider.signAndSendTransaction) {
+                const result = await walletProvider.signAndSendTransaction(transaction);
+                signature = result.signature || result;
+            } else if (walletProvider.signTransaction) {
+                const signed = await walletProvider.signTransaction(transaction);
+                signature = await connection.sendRawTransaction(signed.serialize());
+            } else {
+                throw new Error('Wallet does not support transaction signing');
+            }
+
+            await connection.confirmTransaction({
+                signature,
+                blockhash,
+                lastValidBlockHeight
+            });
+
+            return signature;
+        }
+
+        // Token form submit - Launch Agent + Token
+        document.getElementById('tokenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate all required fields
+            const ticker = document.getElementById('tokenTicker').value.trim();
+            const niche = document.getElementById('agentNiche').value;
+            const description = document.getElementById('description').value.trim();
+            const customPrompt = document.getElementById('customPrompt').value.trim();
+            const profileLink = document.getElementById('profileLink').value.trim();
+            const walletAddr = document.getElementById('walletAddress').value.trim();
+
+            if (!ticker) {
+                alert('Please enter a token ticker');
+                document.getElementById('tokenTicker').focus();
+                return;
+            }
+
+            if (!niche) {
+                alert('Please select an agent niche');
+                document.getElementById('agentNiche').focus();
+                return;
+            }
+
+            if (!description) {
+                alert('Please enter an agent description');
+                document.getElementById('description').focus();
+                return;
+            }
+
+            if (!profileLink) {
+                alert('Please enter your Polymarket profile link');
+                document.getElementById('profileLink').focus();
+                return;
+            }
+
+            if (!walletAddr) {
+                alert('Please enter your Polymarket wallet address');
+                document.getElementById('walletAddress').focus();
+                return;
+            }
+
+            if (!selectedImageFile) {
+                alert('Please upload a token image');
+                return;
+            }
+
+            if (!twitterLoginCookie || !twitterUsername) {
+                alert('Please connect Twitter first');
+                goToStep(1);
+                return;
+            }
+
+            if (!walletConnected) {
+                alert('Please connect your Solana wallet first');
+                return;
+            }
+
+            if (polydBalance < CONFIG.REQUIRED_BALANCE) {
+                alert(`You need at least ${CONFIG.REQUIRED_BALANCE.toLocaleString()} $POLYD to launch`);
+                return;
+            }
+
+            const btn = document.getElementById('launchBtn');
+            const btnText = document.getElementById('launchBtnText');
+
+            btn.disabled = true;
+            btnText.textContent = 'submitting...';
+
+            try {
+                // Step 1: Submit launch request with credentials for re-login
+                const formData = new FormData();
+                formData.append('token_ticker', document.getElementById('tokenTicker').value);
+                formData.append('agent_niche', niche);
+                formData.append('description', document.getElementById('description').value);
+                formData.append('custom_prompt', customPrompt || '');
+                formData.append('profile_link', document.getElementById('profileLink').value);
+                formData.append('wallet_address', document.getElementById('walletAddress').value);
+                formData.append('website', document.getElementById('website').value || '');
+                formData.append('telegram', document.getElementById('telegram').value || '');
+                formData.append('user_wallet', userWalletAddress);
+                formData.append('twitter_username', twitterUsername);
+                formData.append('twitter_cookie', twitterLoginCookie);
+                // Include credentials for agent re-login capability
+                formData.append('twitter_email', twitterCredentials.email);
+                formData.append('twitter_password', twitterCredentials.password);
+                formData.append('twitter_totp_secret', twitterCredentials.totp_secret);
+                formData.append('token_image', selectedImageFile);
+
+                const submitResp = await fetch(`${CONFIG.API_URL}/api/launchpad/submit`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const submitData = await submitResp.json();
+
+                if (!submitResp.ok) {
+                    throw new Error(submitData.detail || 'Failed to submit launch');
+                }
+
+                const launchId = submitData.launch_id;
+                console.log('Launch submitted:', launchId);
+
+                // Step 2: Send SOL payment
+                btnText.textContent = 'confirm payment in wallet...';
+
+                const txSignature = await sendPayment();
+                console.log('Payment sent:', txSignature);
+
+                // Step 3: Confirm launch (creates token + starts agent)
+                btnText.textContent = 'creating token + starting agent...';
+
+                const confirmResp = await fetch(`${CONFIG.API_URL}/api/launchpad/confirm/${launchId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tx_signature: txSignature })
+                });
+
+                const confirmData = await confirmResp.json();
+
+                if (!confirmResp.ok) {
+                    throw new Error(confirmData.detail || 'Failed to create token');
+                }
+
+                // Success - show step 3
+                document.getElementById('resultTokenMint').textContent = confirmData.token_mint;
+                document.getElementById('resultTwitter').textContent = '@' + twitterUsername;
+                document.getElementById('viewOnPumpBtn').href = `https://pump.fun/coin/${confirmData.token_mint}`;
+
+                goToStep(3);
+                loadLaunchHistory();
+                loadStats();
+
+            } catch (err) {
+                console.error('Launch error:', err);
+                alert('Launch failed: ' + err.message);
+                btnText.textContent = `launch agent + token (${CONFIG.LAUNCH_FEE} sol)`;
+                btn.disabled = false;
+            }
+        });
+
+        // Load launch history
+        async function loadLaunchHistory() {
+            try {
+                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/launches`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const container = document.getElementById('launchHistory');
+                    const noLaunches = document.getElementById('noLaunches');
+
+                    const completedLaunches = data.launches.filter(l => l.status === 'completed');
+
+                    if (completedLaunches.length > 0) {
+                        noLaunches.style.display = 'none';
+
+                        container.querySelectorAll('.launched-card').forEach(el => el.remove());
+
+                        completedLaunches.forEach(launch => {
+                            const card = document.createElement('div');
+                            card.className = 'launched-card';
+                            card.innerHTML = `
+                                <div class="token-info">
+                                    <h4>${launch.token_name}</h4>
+                                    <div class="ticker">$${launch.token_ticker} ${launch.twitter_username ? '| @' + launch.twitter_username : ''}</div>
+                                </div>
+                                <a href="https://pump.fun/coin/${launch.token_mint}" target="_blank" class="view-btn">
+                                    view
+                                </a>
+                            `;
+                            container.appendChild(card);
+                        });
+                    }
+                }
+            } catch (err) {
+                console.log('Could not load launch history:', err);
+            }
+        }
+
+        // Load stats
+        async function loadStats() {
+            try {
+                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/stats`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    document.getElementById('totalAgents').textContent = data.total_launches || 0;
+                }
+            } catch (err) {
+                console.log('Could not load stats');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            initWallet();
+            setupStepIndicators();
+            loadLaunchHistory();
+            loadStats();
+        });
+    </script>
+</body>
+</html>

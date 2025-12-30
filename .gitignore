@@ -43,3 +43,14 @@ test-bot/
 .DS_Store
 Thumbs.db
 .claude/
+nul
+
+# Launchpad data files
+agents.json
+launches_history.json
+agent_answered_mentions.json
+posted_events.json
+payments.db
+wallet_sessions.json
+user_intervals.json
+news_cache.json

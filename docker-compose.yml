@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  launchpad:
+    build: .
+    ports:
+      - "5777:5777"
+    environment:
+      - SESSION_SECRET=${SESSION_SECRET}
+      - HELIUS_API_KEY=${HELIUS_API_KEY}
+      - LAUNCHPAD_WALLET_PRIVATE_KEY=${LAUNCHPAD_WALLET_PRIVATE_KEY}
+      - TWITTERAPI_KEY=${TWITTERAPI_KEY}
+      - TWITTER_PROXY=${TWITTER_PROXY}
+      - POLYFACTUAL_API_KEY=${POLYFACTUAL_API_KEY}
+      - FACTSAI_API_KEY=${FACTSAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - REOWN_PROJECT_ID=${REOWN_PROJECT_ID}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
