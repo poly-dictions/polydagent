@@ -88,7 +88,7 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
 LAUNCHPAD_WALLET_PUBLIC_KEY = "8iWGVEYYvrqArN6ChbbLEgsY3eEHeEbwssswYANq2mgS"
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
-REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required
+REQUIRED_POLYD_BALANCE = 1_000  # 1K $POLYD required
 LAUNCH_FEE_SOL = 0.05
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 HELIUS_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
@@ -2318,10 +2318,8 @@ class APIServer:
 
     async def launchpad_config(self, request):
         """Get frontend configuration (public values only)"""
-        # Use public RPC for frontend - don't expose API key
-        public_rpc = "https://api.mainnet-beta.solana.com"
         return web.json_response({
-            "helius_rpc": public_rpc,
+            "helius_rpc": HELIUS_RPC,
             "polyd_mint": POLYD_MINT,
             "required_balance": REQUIRED_POLYD_BALANCE,
             "launch_fee": LAUNCH_FEE_SOL,
@@ -2362,19 +2360,11 @@ class APIServer:
             password = body.get('password', '')
             totp_secret = body.get('totp_secret', '')
 
-            if not all([username, email, password, totp_secret]):
+            if not all([username, email, password]):
                 return web.json_response({"success": False, "message": "Missing required fields"}, status=400)
 
             if not TWITTERAPI_KEY:
                 return web.json_response({"success": False, "message": "TwitterAPI.io not configured"}, status=500)
-
-            # First check if account has blue verification (required for long posts)
-            is_blue_verified = await TwitterAPI.check_blue_verified(username)
-            if not is_blue_verified:
-                return web.json_response({
-                    "success": False,
-                    "message": "Twitter Blue verification required. Your account must have a blue checkmark to launch an agent."
-                }, status=400)
 
             login_cookie = await TwitterAPI.login(username, email, password, totp_secret)
 
