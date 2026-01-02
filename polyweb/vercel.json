@@ -11,7 +11,11 @@
     { "source": "/alerts", "destination": "/alerts/index.html" },
     { "source": "/alerts/", "destination": "/alerts/index.html" },
     { "source": "/roadmap", "destination": "/roadmap/index.html" },
-    { "source": "/roadmap/", "destination": "/roadmap/index.html" }
+    { "source": "/roadmap/", "destination": "/roadmap/index.html" },
+    { "source": "/launchpad", "destination": "/launchpad/index.html" },
+    { "source": "/launchpad/", "destination": "/launchpad/index.html" },
+    { "source": "/launchpad/projects", "destination": "/launchpad/projects/index.html" },
+    { "source": "/launchpad/projects/", "destination": "/launchpad/projects/index.html" }
   ],
   "headers": [
     {

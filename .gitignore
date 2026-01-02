@@ -54,3 +54,5 @@ payments.db
 wallet_sessions.json
 user_intervals.json
 news_cache.json
+polydictions-agent/
+polydictions-os/

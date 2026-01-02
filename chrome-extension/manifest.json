@@ -1,13 +1,12 @@
 {
   "manifest_version": 3,
   "name": "polydictions",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Track and analyze Polymarket prediction markets",
   "permissions": [
     "storage",
     "notifications",
-    "alarms",
-    "tabs"
+    "alarms"
   ],
   "host_permissions": [
     "https://gamma-api.polymarket.com/*",

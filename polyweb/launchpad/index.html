@@ -385,10 +385,11 @@
         }
 
         .image-upload svg {
+            display: block;
+            margin: 0 auto 8px auto;
             width: 32px;
             height: 32px;
             color: rgba(0, 0, 0, 0.4);
-            margin-bottom: 8px;
         }
 
         .image-upload span {
@@ -650,12 +651,12 @@
     <section class="hero">
         <h1>agent launchpad</h1>
         <p>launch your prediction agent + token in one click</p>
-        <div class="hero-stats">
-            <div class="stat">
-                <div class="stat-value" id="totalAgents">0</div>
-                <div class="stat-label">agents launched</div>
-            </div>
+
+        <div style="display: flex; justify-content: center; gap: 12px; margin: 20px 0;">
+            <a href="./" class="nav-link" style="background: white; color: #fb651e; border-color: white;">ai agents</a>
+            <a href="./projects/" class="nav-link">projects</a>
         </div>
+
     </section>
 
     <!-- Progress Steps -->
@@ -822,6 +823,29 @@
                     <p class="image-hint">png, jpg, or gif. max 5mb.</p>
                 </div>
 
+                <div class="form-group">
+                    <label>token allocation <span class="optional">(optional)</span></label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="number" placeholder="0" id="devBuy" min="0" max="85" step="0.1" style="flex: 1;">
+                        <span style="color: #666; font-weight: 500;">SOL</span>
+                    </div>
+                    <p class="image-hint">buy tokens at launch (max 85 SOL). tokens will be sent to your wallet</p>
+                    <div id="totalCost" style="margin-top: 8px; padding: 12px; background: rgba(0,0,0,0.05); border-radius: 12px; font-size: 14px; display: none;">
+                        <span style="color: #666;">total cost:</span>
+                        <span id="totalCostValue" style="font-weight: 600; color: #fb651e; margin-left: 8px;">0.05 SOL</span>
+                    </div>
+                </div>
+
+                <div style="margin: 20px 0; padding: 16px; background: rgba(251, 101, 30, 0.1); border-radius: 16px; border: 1px solid rgba(251, 101, 30, 0.2);">
+                    <p style="font-size: 13px; color: #666; margin-bottom: 8px;">want to claim dev fees from pump.fun?</p>
+                    <a href="https://t.me/simplyclassic69" target="_blank" style="color: #fb651e; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                        </svg>
+                        apply for dev fees payout
+                    </a>
+                </div>
+
                 <button type="submit" class="btn-primary" id="launchBtn" disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
@@ -906,9 +930,9 @@
         function getApiUrl() {
             const host = window.location.host;
             if (host.includes('localhost') || host.includes('127.0.0.1')) {
-                return 'http://localhost:5777';
+                return 'http://localhost:8765';
             }
-            return window.location.origin;
+            return 'https://polydictions-production.up.railway.app';
         }
 
         // Load config from API
@@ -986,30 +1010,12 @@
             }
         }
 
-        // Check $POLYD balance
+        // Check $POLYD balance via API (uses Helius RPC server-side)
         async function checkPolydBalance(walletAddress) {
             try {
-                const response = await fetch(CONFIG.HELIUS_RPC, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: '2.0',
-                        id: 1,
-                        method: 'getTokenAccountsByOwner',
-                        params: [
-                            walletAddress,
-                            { mint: CONFIG.POLYD_MINT },
-                            { encoding: 'jsonParsed' }
-                        ]
-                    })
-                });
-                const data = await response.json();
-
-                if (data.result && data.result.value && data.result.value.length > 0) {
-                    const tokenAccount = data.result.value[0];
-                    return tokenAccount.account.data.parsed.info.tokenAmount.uiAmount;
-                }
-                return 0;
+                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/check-balance?wallet=${walletAddress}`);
+                const data = await resp.json();
+                return data.balance || 0;
             } catch (err) {
                 console.error('Error checking balance:', err);
                 return 0;
@@ -1181,12 +1187,13 @@
             }
         });
 
-        // Send SOL payment
-        async function sendPayment() {
+        // Send SOL payment (includes fee + optional dev buy)
+        async function sendPayment(devBuySol = 0) {
             if (!walletProvider) {
                 throw new Error('Wallet not connected');
             }
 
+            const totalSol = CONFIG.LAUNCH_FEE + devBuySol;
             const connection = new solanaWeb3.Connection(CONFIG.HELIUS_RPC);
             const fromPubkey = new solanaWeb3.PublicKey(userWalletAddress);
             const toPubkey = new solanaWeb3.PublicKey(CONFIG.PAYMENT_ADDRESS);
@@ -1195,7 +1202,7 @@
                 solanaWeb3.SystemProgram.transfer({
                     fromPubkey: fromPubkey,
                     toPubkey: toPubkey,
-                    lamports: CONFIG.LAUNCH_FEE * solanaWeb3.LAMPORTS_PER_SOL
+                    lamports: Math.round(totalSol * solanaWeb3.LAMPORTS_PER_SOL)
                 })
             );
 
@@ -1312,6 +1319,10 @@
                 formData.append('twitter_totp_secret', twitterCredentials.totp_secret);
                 formData.append('token_image', selectedImageFile);
 
+                // Dev buy amount
+                const devBuyAmount = parseFloat(document.getElementById('devBuy').value) || 0;
+                formData.append('dev_buy_sol', devBuyAmount.toString());
+
                 const submitResp = await fetch(`${CONFIG.API_URL}/api/launchpad/submit`, {
                     method: 'POST',
                     body: formData
@@ -1326,10 +1337,10 @@
                 const launchId = submitData.launch_id;
                 console.log('Launch submitted:', launchId);
 
-                // Step 2: Send SOL payment
+                // Step 2: Send SOL payment (fee + dev buy)
                 btnText.textContent = 'confirm payment in wallet...';
 
-                const txSignature = await sendPayment();
+                const txSignature = await sendPayment(devBuyAmount);
                 console.log('Payment sent:', txSignature);
 
                 // Step 3: Confirm launch (creates token + starts agent)
@@ -1413,6 +1424,24 @@
                 console.log('Could not load stats');
             }
         }
+
+        // Dev buy input handler
+        document.getElementById('devBuy').addEventListener('input', (e) => {
+            const devBuy = parseFloat(e.target.value) || 0;
+            const total = devBuy + 0.05;
+            const totalCostDiv = document.getElementById('totalCost');
+            const totalCostValue = document.getElementById('totalCostValue');
+            const launchBtnText = document.getElementById('launchBtnText');
+
+            if (devBuy > 0) {
+                totalCostDiv.style.display = 'block';
+                totalCostValue.textContent = `${total.toFixed(2)} SOL`;
+                launchBtnText.textContent = `launch agent + token (${total.toFixed(2)} sol)`;
+            } else {
+                totalCostDiv.style.display = 'none';
+                launchBtnText.textContent = 'launch agent + token (0.05 sol)';
+            }
+        });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {

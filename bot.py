@@ -25,6 +25,8 @@ class UserStates(StatesGroup):
 
 # Import new features
 from features import Watchlist, Categories, Alerts, NewsTracker
+from dome_tracker import DomeClient, format_whale_alert, format_large_order_alert, format_sentiment_alert
+from payments import payments, PRICES, format_prices, format_balance, format_deposit_instructions
 
 env_path = Path(__file__).parent / '.env'
 load_dotenv(dotenv_path=env_path)
@@ -36,6 +38,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 POLYMARKET_API = "https://gamma-api.polymarket.com"
+POLYMARKET_DATA_API = "https://data-api.polymarket.com"
+
+# Polymarket Builders API Key (for authenticated requests)
+POLYMARKET_BUILDERS_KEY = "019b3895-f661-7002-9826-6d8615dd63cb"
 USERS_FILE = "users.json"
 SEEN_EVENTS_FILE = "seen_events.json"
 KEYWORDS_FILE = "keywords.json"
@@ -44,12 +50,8 @@ POSTED_EVENTS_FILE = "posted_events.json"
 CHECK_INTERVAL = 60  # Check every 60 seconds (1 minute)
 NEWS_CHECK_INTERVAL = 300  # Check watchlist news every 5 minutes
 
-# Channel for broadcasting (loaded from config)
-CHANNEL_ID = None
-try:
-    from config import CHANNEL_ID
-except ImportError:
-    pass
+# Channel for broadcasting
+CHANNEL_ID = -1003253857796
 
 subscribed_users: Set[int] = set()
 seen_events: Set[str] = set()
@@ -261,7 +263,8 @@ class PolymarketAPI:
                     headers={
                         'Content-Type': 'application/json',
                         'Accept': '*/*',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Authorization': f'Bearer {POLYMARKET_BUILDERS_KEY}'
                     }
                 ) as response:
                     logger.info(f"Market Context API status: {response.status}")
@@ -320,6 +323,7 @@ class PolymarketAPI:
     async def fetch_event_by_slug(slug: str) -> Optional[Dict]:
         url = f"{POLYMARKET_API}/events"
         params = {"slug": slug}
+        headers = {"Authorization": f"Bearer {POLYMARKET_BUILDERS_KEY}"}
 
         import ssl
         ssl_context = ssl.create_default_context()
@@ -329,7 +333,7 @@ class PolymarketAPI:
         try:
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, params=params, timeout=15) as response:
+                async with session.get(url, params=params, headers=headers, timeout=15) as response:
                     if response.status == 200:
                         events = await response.json()
                         if isinstance(events, list) and len(events) > 0:
@@ -352,6 +356,7 @@ class PolymarketAPI:
             "order": "createdAt",
             "ascending": "false"
         }
+        headers = {"Authorization": f"Bearer {POLYMARKET_BUILDERS_KEY}"}
 
         import ssl
         ssl_context = ssl.create_default_context()
@@ -361,7 +366,7 @@ class PolymarketAPI:
         try:
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, params=params, timeout=15) as response:
+                async with session.get(url, params=params, headers=headers, timeout=15) as response:
                     if response.status == 200:
                         events = await response.json()
                         return events if isinstance(events, list) else []
@@ -578,6 +583,7 @@ class PolydictionsBot:
         self.categories = Categories()
         self.alerts = Alerts()
         self.news_tracker = NewsTracker()
+        self.dome = DomeClient()
 
         self.setup_handlers()
 
@@ -609,6 +615,20 @@ class PolydictionsBot:
         self.dp.message.register(self.cmd_rmalert, Command("rmalert"))
         self.dp.message.register(self.cmd_interval, Command("interval"))
 
+        # Dome API handlers (whale tracker, order flow, arbitrage) - PAID
+        self.dp.message.register(self.cmd_whales, Command("whales"))
+        self.dp.message.register(self.cmd_flow, Command("flow"))
+        self.dp.message.register(self.cmd_orders, Command("orders"))
+        self.dp.message.register(self.cmd_arb, Command("arb"))
+        self.dp.message.register(self.cmd_arboff, Command("arboff"))
+
+        # Payment system handlers
+        self.dp.message.register(self.cmd_balance, Command("balance"))
+        self.dp.message.register(self.cmd_deposit, Command("deposit"))
+        self.dp.message.register(self.cmd_prices, Command("prices"))
+        self.dp.message.register(self.cmd_confirm, Command("confirm"))
+        self.dp.message.register(self.cmd_sub, Command("sub"))
+
         # State handlers - waiting for user input
         self.dp.message.register(self.handle_deal_link, StateFilter(UserStates.waiting_for_deal_link))
         self.dp.message.register(self.handle_watch_link, StateFilter(UserStates.waiting_for_watch_link))
@@ -618,6 +638,15 @@ class PolydictionsBot:
         commands = [
             BotCommand(command="start", description="🚀 Subscribe to notifications"),
             BotCommand(command="deal", description="📊 Analyze event with AI"),
+            BotCommand(command="sub", description="⚡ Buy arbitrage subscription"),
+            BotCommand(command="arb", description="⚡ Enable arbitrage alerts"),
+            BotCommand(command="arboff", description="🔕 Disable arbitrage alerts"),
+            BotCommand(command="balance", description="💎 Your $POLYD balance"),
+            BotCommand(command="deposit", description="💳 Add $POLYD tokens"),
+            BotCommand(command="prices", description="💰 View command prices"),
+            BotCommand(command="whales", description="🐋 Find top whales [200 $POLYD]"),
+            BotCommand(command="flow", description="📈 Order flow [200 $POLYD]"),
+            BotCommand(command="orders", description="💰 Large orders [200 $POLYD]"),
             BotCommand(command="watchlist", description="📋 Show your watchlist"),
             BotCommand(command="watch", description="⭐ Add event to watchlist"),
             BotCommand(command="interval", description="⏱️ Set update interval"),
@@ -643,22 +672,34 @@ class PolydictionsBot:
             "🎯 <b>Welcome to Polydictions Bot</b>\n\n"
             "Track and analyze Polymarket events.\n\n"
             "<b>📊 Main Commands:</b>\n"
-            "📊 /deal &lt;link&gt; - Analyze event\n"
-            "🔔 /start - Subscribe to notifications\n"
-            "⏸️ /pause - Pause notifications\n"
-            "▶️ /resume - Resume notifications\n\n"
+            "/deal &lt;link&gt; - Analyze event\n"
+            "/start - Subscribe to notifications\n"
+            "/pause - Pause notifications\n"
+            "/resume - Resume notifications\n\n"
+            "<b>⚡ Arbitrage Alerts:</b>\n"
+            "/sub - Buy subscription (7K/week, 30K/month)\n"
+            "/arb - Enable arbitrage alerts\n"
+            "/arboff - Disable arbitrage alerts\n\n"
+            "<b>🐋 Smart Money (200 $POLYD each):</b>\n"
+            "/whales - Find top whales by PnL\n"
+            "/flow - Order flow sentiment\n"
+            "/orders - Large orders alerts\n\n"
+            "<b>💎 $POLYD Payments:</b>\n"
+            "/balance - Your token balance\n"
+            "/deposit - Add $POLYD tokens\n"
+            "/prices - View all prices\n\n"
             "<b>🔍 Filters:</b>\n"
-            "🔍 /keywords - Filter by keywords\n"
-            "📂 /category - Filter by category\n"
-            "📂 /categories - Show all categories\n\n"
+            "/keywords - Filter by keywords\n"
+            "/category - Filter by category\n"
+            "/categories - Show all categories\n\n"
             "<b>📋 Watchlist:</b>\n"
-            "⭐ /watch &lt;slug&gt; - Add to watchlist\n"
-            "📋 /watchlist - Show watchlist\n"
-            "❌ /unwatch &lt;slug&gt; - Remove from watchlist\n\n"
+            "/watch &lt;slug&gt; - Add to watchlist\n"
+            "/watchlist - Show watchlist\n"
+            "/unwatch &lt;slug&gt; - Remove from watchlist\n\n"
             "<b>🔔 Price Alerts:</b>\n"
-            "🔔 /alert &lt;slug&gt; &gt; &lt;%&gt; - Set alert\n"
-            "📊 /alerts - Show alerts\n"
-            "❌ /rmalert &lt;#&gt; - Remove alert\n\n"
+            "/alert &lt;slug&gt; &gt; &lt;%&gt; - Set alert\n"
+            "/alerts - Show alerts\n"
+            "/rmalert &lt;#&gt; - Remove alert\n\n"
             "You're now subscribed to new events! 🔔\n"
             "Use /help for more info"
         )
@@ -721,20 +762,52 @@ class PolydictionsBot:
 
             if market_context:
                 logger.info(f"Successfully fetched Market Context: {len(market_context)} chars")
-                context_text = f"🧠 <b>Market Context:</b>\n\n{market_context}"
 
-                # Check if context is too long
-                if len(context_text) > 4000:
+                # Split into chunks (Telegram limit is 4096, use 3500 to be safe)
+                max_chunk = 3500
+
+                async def send_chunked(text: str, first_msg):
+                    """Send text in chunks, editing first message and sending rest as new"""
+                    if len(text) <= max_chunk:
+                        full_text = f"🧠 <b>Market Context:</b>\n\n{text}"
+                        if len(full_text) > 4000:
+                            full_text = full_text[:3950] + "..."
+                        await first_msg.edit_text(full_text)
+                        return
+
                     # Split into chunks
-                    await context_msg.edit_text("🧠 <b>Market Context:</b>\n\n(Message too long, sending in parts...)")
-                    chunks = [market_context[i:i+3900] for i in range(0, len(market_context), 3900)]
+                    chunks = []
+                    current = 0
+                    while current < len(text):
+                        end = min(current + max_chunk, len(text))
+                        if end < len(text):
+                            # Find break point
+                            for sep in ['\n\n', '\n', '. ', ' ']:
+                                pos = text.rfind(sep, current + 500, end)
+                                if pos > current + 500:
+                                    end = pos + len(sep)
+                                    break
+                        chunk = text[current:end].strip()
+                        if chunk:
+                            chunks.append(chunk)
+                        current = end
+
+                    # Send chunks
                     for idx, chunk in enumerate(chunks):
-                        if idx == 0:
-                            await context_msg.edit_text(f"🧠 <b>Market Context (Part {idx+1}):</b>\n\n{chunk}")
-                        else:
-                            await message.answer(f"🧠 <b>Market Context (Part {idx+1}):</b>\n\n{chunk}")
-                else:
-                    await context_msg.edit_text(context_text)
+                        header = f"🧠 <b>Context ({idx+1}/{len(chunks)}):</b>\n\n"
+                        msg_text = header + chunk
+                        if len(msg_text) > 4000:
+                            msg_text = msg_text[:3950] + "..."
+                        try:
+                            if idx == 0:
+                                await first_msg.edit_text(msg_text)
+                            else:
+                                await message.answer(msg_text)
+                            await asyncio.sleep(0.3)
+                        except Exception as e:
+                            logger.error(f"Chunk {idx+1} error: {e}")
+
+                await send_chunked(market_context, context_msg)
             else:
                 logger.error(f"Market Context returned None for slug: {event_slug}")
                 await context_msg.edit_text(
@@ -795,16 +868,47 @@ class PolydictionsBot:
             market_context = await PolymarketAPI.fetch_market_context(event_slug, market_question)
 
             if market_context:
-                context_text = f"🧠 <b>Market Context:</b>\n\n{market_context}"
-                if len(context_text) > 4000:
-                    chunks = [market_context[i:i+3900] for i in range(0, len(market_context), 3900)]
+                # Use same chunking logic
+                max_chunk = 3500
+
+                async def send_chunked(text: str, first_msg):
+                    if len(text) <= max_chunk:
+                        full_text = f"🧠 <b>Market Context:</b>\n\n{text}"
+                        if len(full_text) > 4000:
+                            full_text = full_text[:3950] + "..."
+                        await first_msg.edit_text(full_text)
+                        return
+
+                    chunks = []
+                    current = 0
+                    while current < len(text):
+                        end = min(current + max_chunk, len(text))
+                        if end < len(text):
+                            for sep in ['\n\n', '\n', '. ', ' ']:
+                                pos = text.rfind(sep, current + 500, end)
+                                if pos > current + 500:
+                                    end = pos + len(sep)
+                                    break
+                        chunk = text[current:end].strip()
+                        if chunk:
+                            chunks.append(chunk)
+                        current = end
+
                     for idx, chunk in enumerate(chunks):
-                        if idx == 0:
-                            await context_msg.edit_text(f"🧠 <b>Market Context (Part {idx+1}):</b>\n\n{chunk}")
-                        else:
-                            await message.answer(f"🧠 <b>Market Context (Part {idx+1}):</b>\n\n{chunk}")
-                else:
-                    await context_msg.edit_text(context_text)
+                        header = f"🧠 <b>Context ({idx+1}/{len(chunks)}):</b>\n\n"
+                        msg_text = header + chunk
+                        if len(msg_text) > 4000:
+                            msg_text = msg_text[:3950] + "..."
+                        try:
+                            if idx == 0:
+                                await first_msg.edit_text(msg_text)
+                            else:
+                                await message.answer(msg_text)
+                            await asyncio.sleep(0.3)
+                        except Exception as e:
+                            logger.error(f"Chunk {idx+1} error: {e}")
+
+                await send_chunked(market_context, context_msg)
             else:
                 await context_msg.edit_text(
                     "⚠️ Market Context generation failed.\n\n"
@@ -854,24 +958,32 @@ class PolydictionsBot:
             "/start - Subscribe to notifications\n"
             "/pause - Pause notifications\n"
             "/resume - Resume notifications\n\n"
+            "<b>⚡ Arbitrage Alerts:</b>\n"
+            "/sub - Buy subscription (7K/week, 30K/month)\n"
+            "/arb - Enable arbitrage alerts\n"
+            "/arboff - Disable arbitrage alerts\n\n"
+            "<b>🐋 Smart Money (200 $POLYD each):</b>\n"
+            "/whales - Find top whales by PnL\n"
+            "/flow [slug] - Order flow sentiment\n"
+            "/orders [min$] - Large orders alerts\n\n"
+            "<b>💎 $POLYD Payments:</b>\n"
+            "/balance - Your token balance\n"
+            "/deposit - Add $POLYD tokens\n"
+            "/prices - View all prices\n\n"
             "<b>🔍 Filters:</b>\n"
             "/keywords - Filter by keywords\n"
-            "/category - Filter by category (crypto, politics, sports)\n"
+            "/category - Filter by category\n"
             "/categories - Show all categories\n\n"
             "<b>📋 Watchlist:</b>\n"
             "/watch &lt;slug&gt; - Add to watchlist\n"
             "/watchlist - Show watchlist\n"
-            "/unwatch &lt;slug&gt; - Remove from watchlist\n\n"
+            "/unwatch &lt;slug&gt; - Remove\n\n"
             "<b>🔔 Price Alerts:</b>\n"
             "/alert &lt;slug&gt; &gt; &lt;%&gt; - Set alert\n"
             "/alerts - Show alerts\n"
             "/rmalert &lt;#&gt; - Remove alert\n\n"
-            "<b>Features:</b>\n"
-            "• 🧠 AI-powered Market Context\n"
-            "• 📈 Event statistics & odds\n"
-            "• 🔔 Price alerts\n"
-            "• 📋 Watchlist tracking\n"
-            "• 🔍 Smart filtering"
+            "<b>🔥 Tokenomics:</b>\n"
+            "50% burned + 50% to product development"
         )
 
         await message.answer(text)
@@ -1280,6 +1392,463 @@ class PolydictionsBot:
                 f"Example: /interval 3"
             )
 
+    # ============ DOME API COMMANDS (PAID - 200 $POLYD each) ============
+
+    async def cmd_whales(self, message: Message):
+        """Find whales by PnL - PAID COMMAND"""
+        user_id = message.from_user.id
+
+        # Check balance
+        has_enough, balance, required = payments.check_balance(user_id, 'whales')
+        if not has_enough:
+            await message.answer(
+                f"❌ <b>Insufficient $POLYD balance</b>\n\n"
+                f"Required: {required} $POLYD\n"
+                f"Your balance: {balance} $POLYD\n\n"
+                f"/deposit — Add tokens\n"
+                f"/prices — View all prices"
+            )
+            return
+
+        # Deduct and burn tokens
+        if not payments.deduct_and_burn(user_id, 'whales'):
+            await message.answer("❌ Payment failed. Try again.")
+            return
+
+        processing = await message.answer("🐋 Loading leaderboard... (100 burned 🔥 + 100 to product)")
+
+        try:
+            # Use official Polymarket leaderboard API
+            whales = await self.dome.get_leaderboard(period='MONTH', limit=25)
+
+            if not whales:
+                await processing.edit_text("No data available.")
+                return
+
+            # Add delay before sending result
+            await asyncio.sleep(4)
+
+            msg = ["🐋 <b>Top Whales (by PnL) | December 2025</b>\n"]
+            for w in whales[:20]:
+                rank = w['rank']
+                addr = w['address']
+                username = w['username']
+                pnl = w['pnl']
+                vol = w['volume']
+
+                # Display name (username or shortened address)
+                if username and not username.startswith('0x'):
+                    name = username[:15]
+                else:
+                    name = f"{addr[:6]}...{addr[-4:]}"
+
+                emoji = "🟢" if pnl > 0 else "🔴"
+                msg.append(f"{rank}. {emoji} <b>${pnl:,.0f}</b> | {name}")
+                msg.append(f"   Vol: ${vol:,.0f}")
+                msg.append(f"   <code>{addr}</code>\n")
+
+            new_balance = payments.get_balance(user_id)
+            msg.append(f"<i>Found {len(whales[:20])} whales | Balance: {new_balance:,} $POLYD</i>")
+            await processing.edit_text("\n".join(msg))
+            logger.info(f"User {user_id} checked whales (burned 200 $POLYD)")
+
+        except Exception as e:
+            logger.error(f"Error in /whales: {e}")
+            await processing.edit_text(f"❌ Error: {str(e)}")
+
+    async def cmd_flow(self, message: Message):
+        """Get order flow sentiment - PAID COMMAND"""
+        user_id = message.from_user.id
+
+        # Check balance
+        has_enough, balance, required = payments.check_balance(user_id, 'flow')
+        if not has_enough:
+            await message.answer(
+                f"❌ <b>Insufficient $POLYD balance</b>\n\n"
+                f"Required: {required} $POLYD\n"
+                f"Your balance: {balance} $POLYD\n\n"
+                f"/deposit — Add tokens\n"
+                f"/prices — View all prices"
+            )
+            return
+
+        # Deduct and burn tokens
+        if not payments.deduct_and_burn(user_id, 'flow'):
+            await message.answer("❌ Payment failed. Try again.")
+            return
+
+        text = message.text or ""
+        parts = text.split(maxsplit=1)
+
+        market_slug = None
+        if len(parts) > 1:
+            market_slug = parts[1].strip()
+
+        processing = await message.answer("📊 Analyzing order flow... (100 burned 🔥 + 100 to product)")
+
+        try:
+            # Get more orders for better analysis
+            sentiment = await self.dome.get_order_flow_sentiment(market_slug=market_slug, limit=500)
+
+            # Add delay before result
+            await asyncio.sleep(4)
+
+            # Determine sentiment emoji and bar
+            buy_pct = sentiment['buy_percentage']
+            if buy_pct > 60:
+                sentiment_emoji = "🟢"
+                sentiment_text = "BULLISH"
+            elif buy_pct < 40:
+                sentiment_emoji = "🔴"
+                sentiment_text = "BEARISH"
+            else:
+                sentiment_emoji = "⚪"
+                sentiment_text = "NEUTRAL"
+
+            # Create visual bar
+            bar_length = 20
+            buy_bars = int(buy_pct / 100 * bar_length)
+            sell_bars = bar_length - buy_bars
+            bar = "🟩" * buy_bars + "🟥" * sell_bars
+
+            total_volume = sentiment['buy_volume'] + sentiment['sell_volume']
+            total_orders = sentiment['buy_count'] + sentiment['sell_count']
+
+            new_balance = payments.get_balance(user_id)
+
+            msg = [
+                f"📊 <b>Order Flow Analysis</b>",
+                f"",
+                f"<b>Market:</b> {market_slug or 'All Polymarket'}",
+                f"<b>Sample:</b> {total_orders} orders | ${total_volume:,.0f} volume",
+                f"",
+                f"{bar}",
+                f"",
+                f"{sentiment_emoji} <b>Sentiment: {sentiment_text}</b>",
+                f"",
+                f"┌─────────────────────────────",
+                f"│ 🟢 <b>BUY</b>",
+                f"│ Volume: <code>${sentiment['buy_volume']:,.0f}</code>",
+                f"│ Orders: {sentiment['buy_count']}",
+                f"│ Share: <b>{buy_pct:.1f}%</b>",
+                f"├─────────────────────────────",
+                f"│ 🔴 <b>SELL</b>",
+                f"│ Volume: <code>${sentiment['sell_volume']:,.0f}</code>",
+                f"│ Orders: {sentiment['sell_count']}",
+                f"│ Share: <b>{100 - buy_pct:.1f}%</b>",
+                f"└─────────────────────────────",
+                f"",
+                f"<i>Found {total_orders} orders | Balance: {new_balance:,} $POLYD</i>"
+            ]
+
+            await processing.edit_text("\n".join(msg))
+            logger.info(f"User {user_id} checked flow (burned 200 $POLYD)")
+
+        except Exception as e:
+            logger.error(f"Error in /flow: {e}")
+            await processing.edit_text(f"❌ Error: {str(e)}")
+
+    async def cmd_orders(self, message: Message):
+        """Get large orders - PAID COMMAND"""
+        user_id = message.from_user.id
+
+        # Check balance
+        has_enough, balance, required = payments.check_balance(user_id, 'orders')
+        if not has_enough:
+            await message.answer(
+                f"❌ <b>Insufficient $POLYD balance</b>\n\n"
+                f"Required: {required} $POLYD\n"
+                f"Your balance: {balance} $POLYD\n\n"
+                f"/deposit — Add tokens\n"
+                f"/prices — View all prices"
+            )
+            return
+
+        # Deduct and burn tokens
+        if not payments.deduct_and_burn(user_id, 'orders'):
+            await message.answer("❌ Payment failed. Try again.")
+            return
+
+        text = message.text or ""
+        parts = text.split()
+
+        min_value = 100  # Default $100 (lowered from $500)
+        if len(parts) > 1:
+            try:
+                min_value = float(parts[1])
+            except ValueError:
+                pass
+
+        processing = await message.answer(f"📈 Finding orders >${min_value:,.0f}... (100 burned 🔥 + 100 to product)")
+
+        try:
+            # Get more orders to find large ones
+            orders = await self.dome.get_large_orders(min_value=min_value, limit=200)
+
+            # Add delay before result
+            await asyncio.sleep(4)
+
+            if not orders:
+                new_balance = payments.get_balance(user_id)
+                await processing.edit_text(
+                    f"📈 <b>Large Orders</b>\n\n"
+                    f"No orders found above ${min_value:,.0f}\n\n"
+                    f"<i>Try: /orders 50 for smaller threshold</i>\n\n"
+                    f"<i>Balance: {new_balance:,} $POLYD</i>"
+                )
+                return
+
+            # Calculate stats
+            total_value = sum(o['value'] for o in orders)
+            buy_orders = [o for o in orders if o['side'] == 'BUY']
+            sell_orders = [o for o in orders if o['side'] == 'SELL']
+            buy_value = sum(o['value'] for o in buy_orders)
+            sell_value = sum(o['value'] for o in sell_orders)
+
+            new_balance = payments.get_balance(user_id)
+
+            msg = [
+                f"📈 <b>Large Orders (>${min_value:,.0f})</b>",
+                f"",
+                f"<b>Total:</b> {len(orders)} orders | ${total_value:,.0f}",
+                f"🟢 Buy: {len(buy_orders)} (${buy_value:,.0f}) | 🔴 Sell: {len(sell_orders)} (${sell_value:,.0f})",
+                f"",
+                f"┌─────────────────────────────"
+            ]
+
+            for idx, o in enumerate(orders[:12], 1):
+                side_emoji = "🟢" if o['side'] == 'BUY' else "🔴"
+                addr = f"{o['user'][:6]}..{o['user'][-4:]}"
+                title = o['title'][:30] + ".." if len(o['title']) > 30 else o['title']
+                outcome = o.get('token_label', '')[:10]
+
+                msg.append(f"│ {idx}. {side_emoji} <b>${o['value']:,.0f}</b> | {o['shares']:.0f}@{o['price']:.2f}")
+                msg.append(f"│    {title}")
+                msg.append(f"│    {outcome} • <code>{addr}</code>")
+                if idx < min(len(orders), 12):
+                    msg.append(f"│")
+
+            msg.append(f"└─────────────────────────────")
+            msg.append(f"")
+            msg.append(f"<i>Found {len(orders)} orders | Balance: {new_balance:,} $POLYD</i>")
+
+            await processing.edit_text("\n".join(msg))
+            logger.info(f"User {user_id} checked orders (burned 200 $POLYD)")
+
+        except Exception as e:
+            logger.error(f"Error in /orders: {e}")
+            await processing.edit_text(f"❌ Error: {str(e)}")
+
+    async def cmd_arb(self, message: Message):
+        """Enable arbitrage alerts - requires subscription"""
+        user_id = message.from_user.id
+
+        # Check if has active subscription
+        sub = payments.get_subscription(user_id, 'arb')
+        if not sub['active']:
+            await message.answer(
+                "⚡ <b>Arbitrage Alerts</b>\n\n"
+                "Get real-time alerts for Polymarket vs Kalshi arbitrage opportunities.\n\n"
+                "<b>Subscription required:</b>\n"
+                "/sub week — 7 days for 7,000 $POLYD\n"
+                "/sub month — 30 days for 30,000 $POLYD\n\n"
+                "50% burned + 50% to product development"
+            )
+            return
+
+        # Check if already enabled
+        if payments.is_arb_alerts_enabled(user_id):
+            expires = sub['expires_at'][:10]  # YYYY-MM-DD
+            await message.answer(
+                f"✅ <b>Arb alerts already enabled</b>\n\n"
+                f"Subscription active until: <b>{expires}</b>\n\n"
+                f"Use /arboff to disable alerts."
+            )
+            return
+
+        # Enable arb alerts
+        payments.enable_arb_alerts(user_id)
+        expires = sub['expires_at'][:10]
+
+        await message.answer(
+            f"✅ <b>Arb alerts enabled!</b>\n\n"
+            f"Subscription active until: <b>{expires}</b>\n\n"
+            f"You'll receive real-time alerts when arbitrage opportunities (>2% spread) "
+            f"appear between Polymarket and Kalshi.\n\n"
+            f"Use /arboff to disable alerts."
+        )
+        logger.info(f"User {user_id} enabled arb alerts")
+
+    async def cmd_arboff(self, message: Message):
+        """Disable arbitrage alerts - toggle OFF"""
+        user_id = message.from_user.id
+
+        # Check if enabled
+        if not payments.is_arb_alerts_enabled(user_id):
+            await message.answer(
+                "❌ <b>Arb alerts not enabled</b>\n\n"
+                "Use /arb to enable arbitrage alerts."
+            )
+            return
+
+        # Disable arb alerts
+        payments.disable_arb_alerts(user_id)
+
+        await message.answer(
+            "🔕 <b>Arb alerts disabled</b>\n\n"
+            "You won't receive arbitrage alerts anymore.\n\n"
+            "Use /arb to re-enable alerts."
+        )
+        logger.info(f"User {user_id} disabled arb alerts")
+
+    # ============ PAYMENT COMMANDS ============
+
+    async def cmd_balance(self, message: Message):
+        """Show user's $POLYD balance"""
+        user_id = message.from_user.id
+        await message.answer(format_balance(user_id))
+
+    async def cmd_deposit(self, message: Message):
+        """Show deposit instructions"""
+        user_id = message.from_user.id
+        memo = payments.create_pending_deposit(user_id, 0)
+        await message.answer(format_deposit_instructions(memo))
+
+    async def cmd_prices(self, message: Message):
+        """Show prices for paid commands"""
+        await message.answer(format_prices())
+
+    async def cmd_sub(self, message: Message):
+        """Subscribe to arb alerts"""
+        user_id = message.from_user.id
+        text = message.text or ""
+        parts = text.split()
+
+        # Check current subscription
+        sub = payments.get_subscription(user_id, 'arb')
+        balance = payments.get_balance(user_id)
+
+        if len(parts) < 2:
+            # Show subscription options
+            sub_status = ""
+            if sub['active']:
+                expires = sub['expires_at'][:10]
+                sub_status = f"\n✅ <b>Active until:</b> {expires}\n"
+
+            await message.answer(
+                f"⚡ <b>Arbitrage Subscription</b>\n"
+                f"{sub_status}\n"
+                f"Get real-time Polymarket vs Kalshi arb alerts.\n\n"
+                f"<b>Plans:</b>\n"
+                f"/sub week — 7 days for <b>7,000</b> $POLYD\n"
+                f"/sub month — 30 days for <b>30,000</b> $POLYD\n\n"
+                f"Your balance: <b>{balance:,}</b> $POLYD\n\n"
+                f"50% burned + 50% to product development"
+            )
+            return
+
+        plan = parts[1].lower()
+
+        if plan == 'week':
+            sub_type = 'arb_week'
+            price = 7000
+            days = 7
+        elif plan == 'month':
+            sub_type = 'arb_month'
+            price = 30000
+            days = 30
+        else:
+            await message.answer(
+                "❌ Invalid plan. Use:\n"
+                "/sub week — 7 days\n"
+                "/sub month — 30 days"
+            )
+            return
+
+        # Check balance
+        if balance < price:
+            await message.answer(
+                f"❌ <b>Insufficient balance</b>\n\n"
+                f"Required: {price:,} $POLYD\n"
+                f"Your balance: {balance:,} $POLYD\n\n"
+                f"/deposit — Add tokens"
+            )
+            return
+
+        # Process subscription
+        if payments.subscribe(user_id, sub_type):
+            new_balance = payments.get_balance(user_id)
+            new_sub = payments.get_subscription(user_id, 'arb')
+            expires = new_sub['expires_at'][:10]
+
+            await message.answer(
+                f"✅ <b>Subscription activated!</b>\n\n"
+                f"Plan: {days} days\n"
+                f"Paid: {price:,} $POLYD\n"
+                f"Active until: <b>{expires}</b>\n\n"
+                f"New balance: {new_balance:,} $POLYD\n\n"
+                f"Use /arb to enable alerts!"
+            )
+            logger.info(f"User {user_id} subscribed to {sub_type} ({price} $POLYD)")
+        else:
+            await message.answer("❌ Subscription failed. Try again.")
+
+    async def cmd_confirm(self, message: Message):
+        """Confirm a deposit transaction"""
+        user_id = message.from_user.id
+        text = message.text or ""
+        parts = text.split(maxsplit=1)
+
+        if len(parts) < 2:
+            await message.answer(
+                "❌ Please provide transaction signature\n\n"
+                "Example: /confirm 5abc123..."
+            )
+            return
+
+        tx_signature = parts[1].strip()
+        processing = await message.answer("🔍 Verifying transaction...")
+
+        try:
+            # Check if transaction already used
+            if payments.is_tx_used(tx_signature):
+                await processing.edit_text(
+                    "❌ <b>Transaction already used</b>\n\n"
+                    "This transaction has already been claimed."
+                )
+                return
+
+            result = await payments.verify_deposit(tx_signature)
+
+            if result['success']:
+                amount = result['amount']
+                new_balance = payments.add_balance(user_id, amount, tx_signature)
+
+                if new_balance == -1:
+                    await processing.edit_text(
+                        "❌ <b>Transaction already used</b>\n\n"
+                        "This transaction has already been claimed."
+                    )
+                    return
+
+                await processing.edit_text(
+                    f"✅ <b>Deposit confirmed!</b>\n\n"
+                    f"Amount: +{amount:,} $POLYD\n"
+                    f"New balance: <b>{new_balance:,} $POLYD</b>\n\n"
+                    f"Use /whales, /flow, /orders to access Smart Money data!"
+                )
+                logger.info(f"User {user_id} deposited {amount} $POLYD")
+            else:
+                await processing.edit_text(
+                    f"❌ Could not verify transaction\n\n"
+                    f"Error: {result.get('error', 'Unknown')}\n\n"
+                    f"Make sure you sent $POLYD tokens to the correct address."
+                )
+
+        except Exception as e:
+            logger.error(f"Error confirming deposit: {e}")
+            await processing.edit_text(f"❌ Error: {str(e)}")
+
     async def check_new_events(self):
         global seen_events
         logger.info(f"Starting event monitoring with {len(seen_events)} seen events already loaded")
@@ -1324,12 +1893,45 @@ class PolydictionsBot:
                                     is_actually_new = False
 
                             volume = float(event.get('volume', 0) or 0)
+                            title = event.get('title', '').lower()
+
+                            # Skip spam/repetitive markets (Up or Down, hourly markets, etc.)
+                            is_spam_market = any(spam in title for spam in [
+                                'up or down',
+                                'higher or lower',
+                                'above or below',
+                                '8:30am',
+                                '9:00am',
+                                '9:30am',
+                                '10:00am',
+                                '10:30am',
+                                '11:00am',
+                                '11:30am',
+                                '12:00pm',
+                                '12:30pm',
+                                '1:00pm',
+                                '1:30pm',
+                                '2:00pm',
+                                '2:30pm',
+                                '3:00pm',
+                                '3:30pm',
+                                '4:00pm',
+                                'am-',
+                                'pm-',
+                                'am et',
+                                'pm et',
+                            ])
 
                             if not is_actually_new:
                                 # Old event appearing for first time - mark as seen but don't notify
                                 seen_events.add(event_id)
                                 filtered_high_volume += 1
                                 logger.info(f"Filtered old event: ID={event_id}, Created={created_at_str}, Title={event.get('title', 'N/A')[:50]}")
+                            elif is_spam_market:
+                                # Skip repetitive/spam markets
+                                seen_events.add(event_id)
+                                filtered_high_volume += 1
+                                logger.info(f"Filtered spam market: ID={event_id}, Title={event.get('title', 'N/A')[:50]}")
                             elif volume > 50000:
                                 # This is likely an old event with high volume, mark as seen but don't notify
                                 seen_events.add(event_id)
@@ -1468,6 +2070,126 @@ class PolydictionsBot:
             # Check every 30 seconds for users who need updates
             await asyncio.sleep(30)
 
+    async def check_arb_alerts(self):
+        """Check for arbitrage opportunities and alert users (free)"""
+        logger.info("Starting arbitrage alerts monitoring (80% API usage)...")
+
+        # Keep track of recently sent opportunities to avoid spam
+        sent_opps = {}  # key: "poly_slug:kalshi_ticker" -> timestamp
+
+        await asyncio.sleep(60)  # Wait 1 minute before first check
+
+        while True:
+            try:
+                # Get users with active subscription AND alerts enabled
+                subscribers = payments.get_all_arb_subscribers()
+                alert_users = payments.get_all_arb_alert_users()
+                # Only send to users who have both subscription and alerts enabled
+                users = [u for u in alert_users if u in subscribers]
+
+                if users:
+                    # Find opportunities (using 80% of API limits - more aggressive)
+                    opportunities = await self.dome.find_arbitrage_opportunities(min_diff=2.0)
+
+                    if opportunities:
+                        # Filter out recently sent (last 20 minutes)
+                        import time
+                        now = time.time()
+                        new_opps = []
+
+                        for opp in opportunities[:5]:  # Top 5
+                            key = f"{opp.get('polymarket_slug', '')}:{opp.get('kalshi_ticker', '')}"
+                            if key not in sent_opps or (now - sent_opps[key]) > 1200:  # 20 min
+                                new_opps.append(opp)
+                                sent_opps[key] = now
+
+                        # Clean old entries
+                        sent_opps = {k: v for k, v in sent_opps.items() if now - v < 3600}
+
+                        if new_opps:
+                            # Send individual alert for each opportunity (like @prediction_xbt format)
+                            for opp in new_opps:
+                                alert_text = self.format_arb_alert(opp)
+
+                                # Send to all users
+                                for user_id in users:
+                                    try:
+                                        await self.bot.send_message(user_id, alert_text, disable_web_page_preview=True)
+                                        await asyncio.sleep(0.05)
+                                    except Exception as e:
+                                        logger.error(f"Failed to send arb alert to {user_id}: {e}")
+
+                            logger.info(f"Sent {len(new_opps)} arb alerts to {len(users)} users")
+
+            except Exception as e:
+                logger.error(f"Error in arb alerts: {e}")
+
+            # Check every 1 minute (80% API usage for aggressive monitoring)
+            await asyncio.sleep(60)
+
+    def format_arb_alert(self, opp: dict) -> str:
+        """Format arbitrage alert like @prediction_xbt style"""
+        poly_pct = opp['polymarket_price'] * 100
+        kalshi_pct = opp['kalshi_price'] * 100
+        spread = opp['difference']
+        confidence = opp.get('confidence', 0)
+
+        # Get titles
+        poly_title = opp['polymarket_title']
+        kalshi_title = opp.get('kalshi_title', '')
+
+        # Get slugs for links
+        poly_slug = opp.get('polymarket_slug', '')
+        kalshi_ticker = opp.get('kalshi_ticker', '')
+
+        # Determine action
+        if opp['direction'] == 'buy_poly':
+            action = "BUY Polymarket / SELL Kalshi"
+            arrow = "↗️"
+        else:
+            action = "BUY Kalshi / SELL Polymarket"
+            arrow = "↘️"
+
+        # Confidence indicator
+        if confidence >= 0.8:
+            conf_emoji = "🟢"
+            conf_text = "High"
+        elif confidence >= 0.6:
+            conf_emoji = "🟡"
+            conf_text = "Medium"
+        else:
+            conf_emoji = "🟠"
+            conf_text = "Low"
+
+        # Build message
+        msg = [
+            f"⚡ <b>Arbitrage Alert</b>",
+            f"",
+            f"<b>Polymarket:</b>",
+            f"{poly_title}",
+            f"Price: <b>{poly_pct:.1f}%</b>",
+            f"",
+            f"<b>Kalshi:</b>",
+            f"{kalshi_title}",
+            f"Price: <b>{kalshi_pct:.1f}%</b>",
+            f"",
+            f"{arrow} <b>Spread: {spread:.1f}%</b>",
+            f"{conf_emoji} Match confidence: {conf_text}",
+            f"<i>{action}</i>",
+            f"",
+        ]
+
+        # Add links
+        if poly_slug:
+            msg.append(f"🔗 <a href='https://polymarket.com/event/{poly_slug}'>Polymarket</a>")
+        if kalshi_ticker:
+            msg.append(f"🔗 <a href='https://kalshi.com/markets/{kalshi_ticker}'>Kalshi</a>")
+
+        msg.append("")
+        msg.append("<i>⚠️ DYOR - verify markets match before trading</i>")
+
+        return "\n".join(msg)
+
     async def start(self):
         # Set up menu commands
         await self.setup_bot_commands()
@@ -1482,6 +2204,9 @@ class PolydictionsBot:
 
         # Start watchlist news monitoring
         asyncio.create_task(self.check_watchlist_news())
+
+        # Start arbitrage alerts for subscribers
+        asyncio.create_task(self.check_arb_alerts())
 
         logger.info("Bot started with API server on port 8765")
         await self.dp.start_polling(self.bot, allowed_updates=["message"])

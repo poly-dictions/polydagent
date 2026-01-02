@@ -1,0 +1,22 @@
+# Ignore local files
+.env
+*.db
+__pycache__/
+*.pyc
+.git/
+node_modules/
+nul
+
+# Ignore data files (will be created at runtime)
+agents.json
+launches_history.json
+agent_answered_mentions.json
+posted_events.json
+news_cache.json
+user_intervals.json
+wallet_sessions.json
+
+# Ignore frontend (serve separately via CDN/Vercel)
+polyweb/
+chrome-extension/
+launchpad/

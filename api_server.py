@@ -88,7 +88,7 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
 LAUNCHPAD_WALLET_PUBLIC_KEY = "8iWGVEYYvrqArN6ChbbLEgsY3eEHeEbwssswYANq2mgS"
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
-REQUIRED_POLYD_BALANCE = 1_000  # 1000 $POLYD required
+REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required
 LAUNCH_FEE_SOL = 0.05
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 HELIUS_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
@@ -106,6 +106,7 @@ FACTSAI_API_URL = "https://factsai.org/answer"
 FACTSAI_API_KEY = os.getenv("FACTSAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Agent intervals
 POST_INTERVAL_HOURS = int(os.getenv("AGENT_POST_INTERVAL", "4"))
@@ -113,12 +114,15 @@ MENTION_CHECK_INTERVAL = int(os.getenv("MENTION_CHECK_INTERVAL", "60"))
 
 # Niche keywords for filtering Polymarket events
 NICHE_KEYWORDS = {
-    "crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "sol", "blockchain", "defi", "nft", "token", "coin", "memecoin"],
-    "politics": ["trump", "biden", "election", "president", "congress", "senate", "democrat", "republican", "vote", "poll"],
-    "sports": ["nba", "nfl", "mlb", "nhl", "soccer", "football", "basketball", "baseball", "championship", "playoffs", "super bowl"],
-    "entertainment": ["movie", "film", "oscar", "emmy", "grammy", "netflix", "disney", "marvel", "actor", "actress", "box office"],
-    "tech": ["ai", "artificial intelligence", "openai", "google", "apple", "microsoft", "amazon", "meta", "tesla", "elon musk"],
-    "finance": ["stock", "market", "fed", "interest rate", "inflation", "gdp", "recession", "economy", "s&p", "nasdaq"]
+    "crypto": ["bitcoin", "btc", "ethereum", "eth", "crypto", "solana", "sol", "blockchain", "defi", "nft", "token", "coin", "memecoin", "binance", "coinbase"],
+    "politics": ["trump", "biden", "election", "president", "congress", "senate", "democrat", "republican", "vote", "poll", "governor", "mayor", "political"],
+    "sports": ["nba", "nfl", "mlb", "nhl", "soccer", "football", "basketball", "baseball", "championship", "playoffs", "super bowl",
+               "world cup", "olympics", "tennis", "golf", "ufc", "mma", "boxing", "f1", "formula 1", "nascar", "pga", "wimbledon",
+               "champions league", "premier league", "la liga", "bundesliga", "serie a", "ncaa", "march madness", "world series",
+               "stanley cup", "mvp", "all-star", "lakers", "celtics", "warriors", "chiefs", "eagles", "cowboys", "yankees", "dodgers"],
+    "entertainment": ["movie", "film", "oscar", "emmy", "grammy", "netflix", "disney", "marvel", "actor", "actress", "box office", "album", "song", "concert", "tour"],
+    "tech": ["ai", "artificial intelligence", "openai", "google", "apple", "microsoft", "amazon", "meta", "tesla", "elon musk", "chatgpt", "gpt", "robot", "startup"],
+    "finance": ["stock", "market", "fed", "interest rate", "inflation", "gdp", "recession", "economy", "s&p", "nasdaq", "dow jones", "treasury", "bonds", "earnings"]
 }
 
 # pump.fun API endpoints
@@ -283,10 +287,13 @@ def save_answered_mentions(answered: Dict[str, Set[str]]):
 
 class TwitterAPI:
     @staticmethod
-    async def post_tweet(login_cookies: str, tweet_text: str) -> Optional[str]:
-        url = f"{TWITTERAPI_BASE}/twitter/tweet/create_tweet_v2"
+    async def post_tweet(login_cookies: str, tweet_text: str, force_note_tweet: bool = False) -> Optional[str]:
+        url = f"{TWITTERAPI_BASE}/twitter/create_tweet_v2"
         headers = {"Content-Type": "application/json", "X-API-Key": TWITTERAPI_KEY}
         data = {"tweet_text": tweet_text, "login_cookies": login_cookies, "proxy": TWITTER_PROXY}
+        # Use note tweet for longer posts (up to 4000 chars) or if forced
+        if len(tweet_text) > 280 or force_note_tweet:
+            data["is_note_tweet"] = True
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=data, timeout=60) as resp:
@@ -317,6 +324,33 @@ class TwitterAPI:
         except Exception as e:
             logger.error(f"Reply error: {e}")
             return None
+
+    @staticmethod
+    async def post_thread(login_cookies: str, tweets: List[str]) -> Optional[str]:
+        """Post a thread of tweets, returns ID of first tweet"""
+        if not tweets:
+            return None
+
+        # Post first tweet
+        first_tweet_id = await TwitterAPI.post_tweet(login_cookies, tweets[0])
+        if not first_tweet_id:
+            return None
+
+        logger.info(f"Thread started with tweet ID: {first_tweet_id}")
+
+        # Post replies
+        current_reply_to = first_tweet_id
+        for i, tweet_text in enumerate(tweets[1:], start=2):
+            await asyncio.sleep(2)  # Small delay between tweets
+            reply_id = await TwitterAPI.post_reply(login_cookies, current_reply_to, tweet_text)
+            if reply_id:
+                logger.info(f"Thread tweet {i} posted: {reply_id}")
+                current_reply_to = reply_id
+            else:
+                logger.warning(f"Thread tweet {i} failed")
+                break
+
+        return first_tweet_id
 
     @staticmethod
     async def get_mentions(username: str, since_time: int = None) -> List[Dict]:
@@ -354,6 +388,28 @@ class TwitterAPI:
             logger.error(f"Twitter login error: {e}")
             return None
 
+    @staticmethod
+    async def check_blue_verified(username: str) -> bool:
+        """Check if Twitter account has blue verification (Twitter Blue/Premium)"""
+        url = f"{TWITTERAPI_BASE}/twitter/user/info"
+        headers = {"X-API-Key": TWITTERAPI_KEY}
+        params = {"userName": username}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        user_data = data.get("data", {})
+                        # Check for blue verified badge
+                        is_blue = user_data.get("is_blue_verified", False)
+                        verified_type = user_data.get("verified_type", "")
+                        logger.info(f"Twitter @{username}: blue_verified={is_blue}, verified_type={verified_type}")
+                        return is_blue or verified_type == "Blue"
+                    return False
+        except Exception as e:
+            logger.error(f"Check blue verified error: {e}")
+            return False
+
 # =============================================================================
 # POLYMARKET SCANNER CLASS
 # =============================================================================
@@ -378,6 +434,7 @@ class PolymarketScanner:
             return events
         keywords = NICHE_KEYWORDS.get(niche, [])
         if not keywords:
+            logger.warning(f"No keywords for niche '{niche}', returning all events")
             return events
         filtered = []
         for event in events:
@@ -386,6 +443,9 @@ class PolymarketScanner:
             combined = f"{title} {description}"
             if any(kw in combined for kw in keywords):
                 filtered.append(event)
+        logger.info(f"Filtered {len(events)} events by niche '{niche}': {len(filtered)} matches")
+        # If niche is specified but no matches found, return empty list (don't fallback to all)
+        # This ensures agents only post about their niche
         return filtered
 
     def is_valid_market(self, event: Dict, posted_ids: set) -> bool:
@@ -428,7 +488,9 @@ class PolymarketScanner:
             'slug': event.get('slug', ''),
             'yes_odds': yes_pct,
             'no_odds': 100 - yes_pct,
-            'volume': float(event.get('volume', 0) or 0)
+            'volume': float(event.get('volume', 0) or 0),
+            'liquidity': float(event.get('liquidity', 0) or market.get('liquidity', 0) or 0),
+            'end_date': event.get('endDate') or market.get('endDate')
         }
 
 # =============================================================================
@@ -438,34 +500,86 @@ class PolymarketScanner:
 class AIAnalyzer:
     @staticmethod
     async def analyze_market(title: str, yes_odds: float, no_odds: float, volume: float, custom_prompt: str = "", niche: str = "general") -> Optional[Dict]:
-        if not POLYFACTUAL_API_KEY:
-            return {"reasoning": "Interesting market setup."}
-        query = f"""Analyze this Polymarket prediction market: [{title}]
+        if not ANTHROPIC_API_KEY:
+            return {
+                "signal": "uncertain",
+                "confidence": "low",
+                "reasons": ["insufficient data"],
+                "main_risk": "market uncertainty",
+                "notes": ""
+            }
+
+        # First get facts from FactsAI
+        facts = ""
+        if FACTSAI_API_KEY:
+            try:
+                headers = {"Authorization": f"Bearer {FACTSAI_API_KEY}", "Content-Type": "application/json"}
+                data = {"query": f"Latest news and context about: {title}", "text": True}
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(FACTSAI_API_URL, headers=headers, json=data, timeout=60) as resp:
+                        if resp.status == 200:
+                            result = await resp.json()
+                            if result.get("success") and result.get("data"):
+                                facts = result["data"].get("answer", "") or result["data"].get("text", "")
+                                if isinstance(facts, dict):
+                                    facts = facts.get("text", str(facts))
+                                logger.info(f"Got facts: {str(facts)[:100]}...")
+            except Exception as e:
+                logger.warning(f"FactsAI error: {e}")
+
+        # Use Anthropic Claude for structured analysis
+        prompt = f"""You are a prediction market analyst. Analyze this market and return a JSON response.
+
+Market: {title}
 Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%
 Volume: ${volume:,.0f}
-Provide a brief analysis with:
-1) Key factors supporting YES
-2) Key factors supporting NO
-3) Your recommendation (YES or NO) with confidence level
-Keep it concise - this is for a tweet."""
-        if custom_prompt:
-            query += f"\n\nADDITIONAL INSTRUCTIONS: {custom_prompt}"
-        headers = {'Content-Type': 'application/json', 'X-API-Key': POLYFACTUAL_API_KEY}
-        data = {'query': query, 'text': True}
+
+{f'CONTEXT/NEWS: {str(facts)[:1500]}' if facts else ''}
+
+Return ONLY valid JSON in this exact format (no markdown, no explanation):
+{{
+  "signal": "yes" or "no",
+  "confidence": "high" or "mid" or "low",
+  "reasons": ["reason 1 (max 50 chars)", "reason 2", "reason 3"],
+  "main_risk": "primary risk or uncertainty (max 80 chars)",
+  "notes": "optional macro/timing context (max 60 chars, or empty string)"
+}}
+
+{f'Style note: {custom_prompt}' if custom_prompt else ''}"""
+
+        headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+        data = {"model": "claude-3-haiku-20240307", "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]}
+
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(POLYFACTUAL_API_URL, headers=headers, json=data, timeout=120) as resp:
+                async with session.post(ANTHROPIC_API_URL, headers=headers, json=data, timeout=60) as resp:
                     if resp.status == 200:
                         result = await resp.json()
-                        if result.get('success') and result.get('data'):
-                            answer = result['data'].get('answer', '') or result['data'].get('text', '')
-                            if isinstance(answer, dict):
-                                answer = answer.get('text', str(answer))
-                            reasoning = str(answer).strip()
-                            reasoning = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', reasoning)
-                            reasoning = re.sub(r'https?://\S+', '', reasoning)
-                            reasoning = reasoning.replace('**', '')
-                            return {'reasoning': reasoning}
+                        text = result.get("content", [{}])[0].get("text", "")
+                        # Parse JSON response
+                        try:
+                            # Clean up potential markdown
+                            text = text.strip()
+                            if text.startswith("```"):
+                                text = text.split("```")[1]
+                                if text.startswith("json"):
+                                    text = text[4:]
+                            analysis = json.loads(text.strip())
+                            logger.info(f"AI analysis: signal={analysis.get('signal')}, confidence={analysis.get('confidence')}")
+                            return analysis
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"JSON parse error: {e}, raw: {text[:200]}")
+                            # Fallback: extract what we can
+                            return {
+                                "signal": "yes" if yes_odds > 50 else "no",
+                                "confidence": "low",
+                                "reasons": ["AI analysis parsing failed"],
+                                "main_risk": "analysis uncertainty",
+                                "notes": ""
+                            }
+                    else:
+                        error = await resp.text()
+                        logger.error(f"Anthropic API error: {resp.status} - {error[:200]}")
         except Exception as e:
             logger.error(f"AI analysis error: {e}")
         return None
@@ -536,33 +650,171 @@ def format_volume(volume: float) -> str:
         return f"${volume/1_000:.0f}K"
     return f"${volume:.0f}"
 
-def create_tweet(agent: Dict, market: Dict, reasoning: str) -> str:
-    niche = agent.get("agent_niche", "general")
-    openers = {
-        "crypto": ["alpha alert", "found some edge", "prediction time"],
-        "politics": ["political alpha", "worth watching", "odds looking off"],
-        "sports": ["game day alpha", "spotted value", "market inefficiency"],
-        "entertainment": ["hot take", "entertainment alpha", "worth a look"],
-        "tech": ["tech alpha", "spotted something", "market analysis"],
-        "finance": ["market alpha", "found some edge", "worth watching"],
-        "general": ["alpha alert", "prediction", "market analysis"]
-    }
-    opener = random.choice(openers.get(niche, openers["general"]))
-    short_reasoning = reasoning[:200] + "..." if len(reasoning) > 200 else reasoning
-    tweet = f"""{opener}
+def create_tweet(agent: Dict, market: Dict, analysis: Dict) -> str:
+    """Create tweet in new format (requires Twitter Blue for long posts)"""
+    signal = analysis.get("signal", "uncertain")
+    confidence = analysis.get("confidence", "low")
+    reasons = analysis.get("reasons", ["market dynamics unclear"])
+    main_risk = analysis.get("main_risk", "outcome uncertainty")
+    notes = analysis.get("notes", "")
+
+    # Format volume and liquidity
+    volume_str = format_volume(market['volume'])
+    liquidity_str = format_volume(market.get('liquidity', 0))
+
+    # Calculate time to resolution
+    end_date = market.get('end_date')
+    if end_date:
+        try:
+            from datetime import datetime
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            days_left = (end_dt - now).days
+            if days_left > 30:
+                time_str = f"{days_left // 30} months"
+            else:
+                time_str = f"{days_left} days"
+        except:
+            time_str = "tbd"
+    else:
+        time_str = "tbd"
+
+    # Build reasoning bullets
+    reasoning_lines = ""
+    for i, reason in enumerate(reasons[:3]):
+        reasoning_lines += f"• {reason}\n"
+
+    tweet = f"""worth a look
 
 {market['title']}
 
-YES {market['yes_odds']:.1f}% / NO {market['no_odds']:.1f}%
-vol: {format_volume(market['volume'])}
+yes {market['yes_odds']:.0f}% / no {market['no_odds']:.0f}%
+volume: {volume_str}
+liquidity: {liquidity_str}
+time to resolution: {time_str}
 
-{short_reasoning}
+market link:
+polymarket.com/event/{market['slug']}
+
+signal: {signal} with {confidence} confidence
+
+reasoning:
+{reasoning_lines.strip()}
+
+main risk: {main_risk}
+
+{"notes: " + notes + chr(10) + chr(10) if notes else ""}by @polydictions"""
+
+    return tweet.strip()
+
+def create_tweet_thread(agent: Dict, market: Dict, analysis: Dict) -> List[str]:
+    """Create a thread of tweets instead of one long tweet"""
+    signal = analysis.get("signal", "uncertain")
+    confidence = analysis.get("confidence", "low")
+    reasons = analysis.get("reasons", ["market dynamics unclear"])
+    main_risk = analysis.get("main_risk", "outcome uncertainty")
+    notes = analysis.get("notes", "")
+
+    volume_str = format_volume(market['volume'])
+    liquidity_str = format_volume(market.get('liquidity', 0))
+
+    # Calculate time to resolution
+    end_date = market.get('end_date')
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            now = datetime.now(timezone.utc)
+            days_left = (end_dt - now).days
+            if days_left > 30:
+                time_str = f"{days_left // 30} months"
+            elif days_left > 0:
+                time_str = f"{days_left} days"
+            else:
+                time_str = "ending soon"
+        except:
+            time_str = "tbd"
+    else:
+        time_str = "tbd"
+
+    tweets = []
+
+    # Tweet 1: Hook + Title + key stats
+    tweet1 = f"""market worth watching
+
+{market['title']}
+
+current odds:
+• YES: {market['yes_odds']:.0f}%
+• NO: {market['no_odds']:.0f}%
+
+volume: {volume_str}
+liquidity: {liquidity_str}
+resolves in: {time_str}
 
 polymarket.com/event/{market['slug']}"""
-    ticker = agent.get("token_ticker", "")
-    if ticker:
-        tweet += f"\n\n${ticker}"
-    return tweet[:280]
+    tweets.append(tweet1)
+
+    # Tweet 2: Signal + all reasoning points
+    reasoning_lines = "\n".join([f"• {r}" for r in reasons[:4]])
+    signal_emoji = "🟢" if signal == "yes" else "🔴" if signal == "no" else "⚪"
+    tweet2 = f"""my take: {signal.upper()} {signal_emoji}
+confidence: {confidence}
+
+why i think this:
+
+{reasoning_lines}"""
+    tweets.append(tweet2)
+
+    # Tweet 3: Risk analysis
+    tweet3 = f"""key risk to consider:
+
+{main_risk}
+
+always do your own research. prediction markets can be volatile and odds can shift quickly based on new information."""
+    tweets.append(tweet3)
+
+    # Tweet 4: Notes + call to action + signature
+    if notes:
+        tweet4 = f"""{notes}
+
+what do you think? drop your take below
+
+powered by @polydictions
+track more markets: polydictions.xyz"""
+    else:
+        tweet4 = f"""what do you think? drop your take below
+
+powered by @polydictions
+track more markets: polydictions.xyz"""
+    tweets.append(tweet4)
+
+    return tweets
+
+def create_tweet_short(agent: Dict, market: Dict, analysis: Dict) -> str:
+    """Create short tweet (280 chars) for accounts without Twitter Blue"""
+    signal = analysis.get("signal", "uncertain")
+    confidence = analysis.get("confidence", "low")
+    reasons = analysis.get("reasons", ["market dynamics unclear"])
+    main_risk = analysis.get("main_risk", "outcome uncertainty")
+
+    reason_short = reasons[0][:45] if reasons else "market dynamics"
+    risk_short = main_risk[:40] if main_risk else "uncertainty"
+
+    tweet = f"""{market['title']}
+
+{market['yes_odds']:.0f}% yes / {market['no_odds']:.0f}% no • {format_volume(market['volume'])}
+
+signal: {signal.upper()} ({confidence})
+• {reason_short}
+risk: {risk_short}
+
+polymarket.com/event/{market['slug']}
+
+@polydictions"""
+
+    if len(tweet) > 280:
+        tweet = tweet[:277] + "..."
+    return tweet
 
 async def try_agent_relogin(agent: Dict) -> Optional[str]:
     username = agent.get("twitter_username_cred")
@@ -583,6 +835,12 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
     twitter_cookie = agent.get("twitter_cookie")
     if not twitter_cookie:
         return False
+
+    # Cooldown: don't post more than once per 4 hours
+    last_post = agent_runner_state.get("last_agent_post", {}).get(agent_id, 0)
+    if time.time() - last_post < 4 * 3600:
+        logger.info(f"[{agent_id}] Cooldown active (4h), skipping post")
+        return False
     logger.info(f"[{agent_id}] Scanning {niche} markets...")
     posted_events = agent_runner_state["posted_events"].get(agent_id, set())
     events = await scanner.fetch_events(limit=100)
@@ -593,29 +851,59 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
             market_data = scanner.parse_market_data(event)
             valid_markets.append(market_data)
     if not valid_markets:
+        logger.info(f"[{agent_id}] No valid markets found for niche '{niche}'")
         return False
     top_markets = sorted(valid_markets, key=lambda x: x['volume'], reverse=True)[:10]
+    logger.info(f"[{agent_id}] Top 10 markets: {[m['title'][:40] for m in top_markets]}")
     market = random.choice(top_markets)
     logger.info(f"[{agent_id}] Selected: {market['title']}")
-    ai_result = await AIAnalyzer.analyze_market(
+    analysis = await AIAnalyzer.analyze_market(
         market['title'], market['yes_odds'], market['no_odds'], market['volume'],
         custom_prompt=custom_prompt, niche=niche
     )
-    reasoning = ai_result['reasoning'] if ai_result else "Interesting setup here."
-    tweet_text = create_tweet(agent, market, reasoning)
-    tweet_id = await TwitterAPI.post_tweet(twitter_cookie, tweet_text)
+    if not analysis:
+        analysis = {
+            "signal": "yes" if market['yes_odds'] > 50 else "no",
+            "confidence": "low",
+            "reasons": ["market dynamics favor this outcome"],
+            "main_risk": "unexpected developments",
+            "notes": ""
+        }
+    # Create thread of tweets
+    thread_tweets = create_tweet_thread(agent, market, analysis)
+    logger.info(f"[{agent_id}] Posting thread with {len(thread_tweets)} tweets...")
+
+    tweet_id = await TwitterAPI.post_thread(twitter_cookie, thread_tweets)
+
     if tweet_id:
-        logger.info(f"[{agent_id}] Posted! ID: {tweet_id}")
+        logger.info(f"[{agent_id}] Thread posted! First ID: {tweet_id}")
         if agent_id not in agent_runner_state["posted_events"]:
             agent_runner_state["posted_events"][agent_id] = set()
         agent_runner_state["posted_events"][agent_id].add(market['event_id'])
+        # Record last post time for cooldown
+        if "last_agent_post" not in agent_runner_state:
+            agent_runner_state["last_agent_post"] = {}
+        agent_runner_state["last_agent_post"][agent_id] = time.time()
         return True
     else:
+        # Try re-login and retry posting
         new_cookie = await try_agent_relogin(agent)
         if new_cookie:
             agent["twitter_cookie"] = new_cookie
             running_agents[agent_id]["twitter_cookie"] = new_cookie
             save_agents()
+            # Retry posting with new cookie
+            tweet_id = await TwitterAPI.post_thread(new_cookie, thread_tweets)
+            if tweet_id:
+                logger.info(f"[{agent_id}] Thread posted after re-login! First ID: {tweet_id}")
+                if agent_id not in agent_runner_state["posted_events"]:
+                    agent_runner_state["posted_events"][agent_id] = set()
+                agent_runner_state["posted_events"][agent_id].add(market['event_id'])
+                # Record last post time for cooldown
+                if "last_agent_post" not in agent_runner_state:
+                    agent_runner_state["last_agent_post"] = {}
+                agent_runner_state["last_agent_post"][agent_id] = time.time()
+                return True
         return False
 
 async def process_agent_mentions(agent_id: str, agent: Dict) -> int:
@@ -720,7 +1008,26 @@ async def start_agent(launch_id: str, launch: Dict[str, Any], credentials: Dict[
         })
     save_agents()
     logger.info(f"Agent {agent_id} started for @{launch.get('twitter_username')}")
+
+    # First post on agent launch
+    if running_agents[agent_id].get("twitter_cookie"):
+        asyncio.create_task(first_agent_post(agent_id))
+
     return agent_id
+
+async def first_agent_post(agent_id: str):
+    """Make first post when agent is launched"""
+    await asyncio.sleep(5)  # Small delay for initialization
+    if agent_id not in running_agents:
+        return
+    agent = running_agents[agent_id]
+    scanner = PolymarketScanner()
+    logger.info(f"[{agent_id}] Making first post on launch...")
+    # Set last_post to 0 to bypass cooldown for first post
+    if "last_agent_post" not in agent_runner_state:
+        agent_runner_state["last_agent_post"] = {}
+    agent_runner_state["last_agent_post"][agent_id] = 0
+    await process_agent_posting(agent_id, agent, scanner)
 
 # =============================================================================
 # LAUNCHPAD HELPERS
@@ -834,10 +1141,173 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
                     return None
                 tx_signature = result.get("result")
 
-        return {"token_mint": str(mint_keypair.pubkey()), "tx_signature": tx_signature}
+        return {"token_mint": str(mint_keypair.pubkey()), "tx_signature": tx_signature, "signer_keypair": signer_keypair}
     except Exception as e:
         logger.error(f"Error creating token: {e}")
         return None
+
+
+async def transfer_spl_tokens(token_mint: str, recipient_wallet: str, signer_keypair) -> Optional[str]:
+    """Transfer all tokens from launchpad wallet to user wallet using spl-token-cli style transfer"""
+    try:
+        from solders.pubkey import Pubkey
+        from solders.system_program import ID as SYSTEM_PROGRAM_ID
+        from solders.transaction import Transaction
+        from solders.instruction import Instruction, AccountMeta
+        from solders.message import Message
+        from solders.hash import Hash
+
+        # Both token programs - standard and Token-2022
+        TOKEN_PROGRAM_ID = Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        TOKEN_2022_PROGRAM_ID = Pubkey.from_string("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+        ASSOCIATED_TOKEN_PROGRAM_ID = Pubkey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+
+        mint_pubkey = Pubkey.from_string(token_mint)
+        recipient_pubkey = Pubkey.from_string(recipient_wallet)
+        signer_pubkey = signer_keypair.pubkey()
+
+        # First, detect which token program this mint uses
+        token_program_id = TOKEN_PROGRAM_ID  # default
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getAccountInfo",
+                "params": [str(mint_pubkey), {"encoding": "jsonParsed"}]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                mint_info = result.get("result", {}).get("value")
+                if mint_info:
+                    owner = mint_info.get("owner", "")
+                    if owner == str(TOKEN_2022_PROGRAM_ID):
+                        token_program_id = TOKEN_2022_PROGRAM_ID
+                        logger.info(f"Detected Token-2022 program for mint {token_mint}")
+                    else:
+                        logger.info(f"Using standard Token program for mint {token_mint}")
+
+        # Find token account for signer with this mint
+        source_ata = None
+        amount = 0
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTokenAccountsByOwner",
+                "params": [str(signer_pubkey), {"mint": str(mint_pubkey)}, {"encoding": "jsonParsed"}]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                accounts = result.get("result", {}).get("value", [])
+
+                if not accounts:
+                    logger.error(f"No token accounts found for {signer_pubkey} with mint {mint_pubkey}")
+                    return None
+
+                for acc in accounts:
+                    acc_amount = int(acc["account"]["data"]["parsed"]["info"]["tokenAmount"]["amount"])
+                    if acc_amount > 0:
+                        source_ata = Pubkey.from_string(acc["pubkey"])
+                        amount = acc_amount
+                        logger.info(f"Found source token account {source_ata} with {amount} tokens")
+                        break
+
+                if not source_ata or amount <= 0:
+                    logger.error(f"No tokens found in any account for {signer_pubkey}")
+                    return None
+
+        # Calculate destination ATA (uses detected token program)
+        def get_ata(owner: Pubkey, mint: Pubkey, token_prog: Pubkey) -> Pubkey:
+            seeds = [bytes(owner), bytes(token_prog), bytes(mint)]
+            ata, _ = Pubkey.find_program_address(seeds, ASSOCIATED_TOKEN_PROGRAM_ID)
+            return ata
+
+        dest_ata = get_ata(recipient_pubkey, mint_pubkey, token_program_id)
+        logger.info(f"Destination ATA: {dest_ata}")
+
+        # Check if destination ATA exists
+        dest_ata_exists = False
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getAccountInfo", "params": [str(dest_ata), {"encoding": "base64"}]}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                if result.get("result", {}).get("value"):
+                    dest_ata_exists = True
+                    logger.info("Destination ATA exists")
+
+        # Get recent blockhash
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash"}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                blockhash = Hash.from_string(result["result"]["value"]["blockhash"])
+
+        instructions = []
+
+        # Create ATA if needed (use idempotent create)
+        if not dest_ata_exists:
+            # CreateIdempotent instruction (instruction discriminator = 1)
+            create_ata_ix = Instruction(
+                program_id=ASSOCIATED_TOKEN_PROGRAM_ID,
+                accounts=[
+                    AccountMeta(signer_pubkey, is_signer=True, is_writable=True),  # payer
+                    AccountMeta(dest_ata, is_signer=False, is_writable=True),  # ata
+                    AccountMeta(recipient_pubkey, is_signer=False, is_writable=False),  # owner
+                    AccountMeta(mint_pubkey, is_signer=False, is_writable=False),  # mint
+                    AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+                    AccountMeta(token_program_id, is_signer=False, is_writable=False),  # Use detected program
+                ],
+                data=bytes([1])  # CreateIdempotent instruction
+            )
+            instructions.append(create_ata_ix)
+            logger.info(f"Added CreateIdempotent ATA instruction with token program {token_program_id}")
+
+        # Transfer instruction
+        import struct
+        transfer_data = bytes([3]) + struct.pack('<Q', amount)
+        transfer_ix = Instruction(
+            program_id=token_program_id,  # Use detected program
+            accounts=[
+                AccountMeta(source_ata, is_signer=False, is_writable=True),
+                AccountMeta(dest_ata, is_signer=False, is_writable=True),
+                AccountMeta(signer_pubkey, is_signer=True, is_writable=False),
+            ],
+            data=transfer_data
+        )
+        instructions.append(transfer_ix)
+
+        logger.info(f"Transferring {amount} tokens from {source_ata} to {dest_ata}")
+
+        # Build and sign transaction
+        message = Message.new_with_blockhash(instructions, signer_pubkey, blockhash)
+        tx = Transaction.new_unsigned(message)
+        tx.sign([signer_keypair], blockhash)
+
+        # Send transaction
+        import base64
+        tx_bytes = bytes(tx)
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sendTransaction",
+                "params": [base64.b64encode(tx_bytes).decode(), {"encoding": "base64"}]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                if "error" in result:
+                    logger.error(f"Transfer failed: {result['error']}")
+                    return None
+                tx_sig = result.get("result")
+                logger.info(f"Token transfer successful: {tx_sig}")
+                return tx_sig
+
+    except Exception as e:
+        logger.error(f"Token transfer error: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 
 class APIServer:
     def __init__(self, host: str = "0.0.0.0", port: int = None):
@@ -900,6 +1370,7 @@ class APIServer:
         # Launchpad routes
         self.app.router.add_get("/api/launchpad/config", self.launchpad_config)
         self.app.router.add_get("/api/launchpad/wallet", self.launchpad_wallet)
+        self.app.router.add_get("/api/launchpad/check-balance", self.launchpad_check_balance)
         self.app.router.add_post("/api/launchpad/twitter-login", self.launchpad_twitter_login)
         self.app.router.add_post("/api/launchpad/check-eligibility", self.launchpad_check_eligibility)
         self.app.router.add_post("/api/launchpad/submit", self.launchpad_submit)
@@ -909,6 +1380,12 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/stats", self.launchpad_stats)
         self.app.router.add_get("/api/launchpad/agents", self.launchpad_agents)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
+        self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
+
+        # Project launchpad (token only, no agent)
+        self.app.router.add_post("/api/projects/launch", self.projects_launch)
+        self.app.router.add_post("/api/projects/confirm/{launch_id}", self.projects_confirm)
+        self.app.router.add_get("/api/projects/list", self.projects_list)
 
         # Static file serving (only if polyweb folder exists - not needed on Railway)
         static_dir = Path(__file__).parent / 'polyweb'
@@ -925,6 +1402,10 @@ class APIServer:
             self.app.router.add_get('/roadmap/', lambda r: web.FileResponse(static_dir / 'roadmap' / 'index.html'))
             self.app.router.add_get('/alerts', lambda r: web.FileResponse(static_dir / 'alerts' / 'index.html'))
             self.app.router.add_get('/alerts/', lambda r: web.FileResponse(static_dir / 'alerts' / 'index.html'))
+            self.app.router.add_get('/launchpad', lambda r: web.FileResponse(static_dir / 'launchpad' / 'index.html'))
+            self.app.router.add_get('/launchpad/', lambda r: web.FileResponse(static_dir / 'launchpad' / 'index.html'))
+            self.app.router.add_get('/launchpad/projects', lambda r: web.FileResponse(static_dir / 'launchpad' / 'projects' / 'index.html'))
+            self.app.router.add_get('/launchpad/projects/', lambda r: web.FileResponse(static_dir / 'launchpad' / 'projects' / 'index.html'))
 
             # Static assets
             self.app.router.add_static('/css', static_dir / 'css')
@@ -1837,8 +2318,10 @@ class APIServer:
 
     async def launchpad_config(self, request):
         """Get frontend configuration (public values only)"""
+        # Use public RPC for frontend - don't expose API key
+        public_rpc = "https://api.mainnet-beta.solana.com"
         return web.json_response({
-            "helius_rpc": HELIUS_RPC,
+            "helius_rpc": public_rpc,
             "polyd_mint": POLYD_MINT,
             "required_balance": REQUIRED_POLYD_BALANCE,
             "launch_fee": LAUNCH_FEE_SOL,
@@ -1852,6 +2335,22 @@ class APIServer:
             "address": LAUNCHPAD_WALLET_PUBLIC_KEY,
             "fee_sol": LAUNCH_FEE_SOL,
             "required_polyd": REQUIRED_POLYD_BALANCE
+        })
+
+    async def launchpad_check_balance(self, request):
+        """Check $POLYD balance for a wallet"""
+        wallet = request.query.get('wallet', '')
+        if not wallet:
+            return web.json_response({"error": "wallet parameter required"}, status=400)
+
+        balance = await check_polyd_balance(wallet)
+        eligible = balance >= REQUIRED_POLYD_BALANCE
+
+        return web.json_response({
+            "balance": balance,
+            "required": REQUIRED_POLYD_BALANCE,
+            "eligible": eligible,
+            "missing": max(0, REQUIRED_POLYD_BALANCE - balance)
         })
 
     async def launchpad_twitter_login(self, request):
@@ -1869,13 +2368,22 @@ class APIServer:
             if not TWITTERAPI_KEY:
                 return web.json_response({"success": False, "message": "TwitterAPI.io not configured"}, status=500)
 
+            # First check if account has blue verification (required for long posts)
+            is_blue_verified = await TwitterAPI.check_blue_verified(username)
+            if not is_blue_verified:
+                return web.json_response({
+                    "success": False,
+                    "message": "Twitter Blue verification required. Your account must have a blue checkmark to launch an agent."
+                }, status=400)
+
             login_cookie = await TwitterAPI.login(username, email, password, totp_secret)
 
             if login_cookie:
                 return web.json_response({
                     "success": True,
                     "message": "Twitter login successful",
-                    "login_cookie": login_cookie
+                    "login_cookie": login_cookie,
+                    "is_blue_verified": True
                 })
             else:
                 return web.json_response({"success": False, "message": "Twitter login failed"}, status=400)
@@ -1944,6 +2452,9 @@ class APIServer:
             token_ticker = fields['token_ticker'].replace('$', '').upper()
             token_name = f"{token_ticker} Agent"
 
+            # Parse dev buy amount (max 85 SOL)
+            dev_buy_sol = min(float(fields.get('dev_buy_sol', 0) or 0), 85.0)
+
             pending_launches[launch_id] = {
                 "token_ticker": token_ticker,
                 "token_name": token_name,
@@ -1964,6 +2475,7 @@ class APIServer:
                 },
                 "user_wallet": fields['user_wallet'],
                 "image_data": image_data,
+                "dev_buy_sol": dev_buy_sol,
                 "status": "pending_payment",
                 "created_at": time.time()
             }
@@ -2012,13 +2524,32 @@ class APIServer:
             website=launch.get("website"),
             twitter=launch.get("twitter_username"),
             telegram=launch.get("telegram"),
-            dev_buy_sol=0
+            dev_buy_sol=launch.get("dev_buy_sol", 0)
         )
 
         if result:
             launch["status"] = "completed"
             launch["token_mint"] = result["token_mint"]
             launch["tx_signature"] = result["tx_signature"]
+
+            # Transfer tokens to user if dev_buy was used
+            transfer_tx = None
+            if launch.get("dev_buy_sol", 0) > 0 and result.get("signer_keypair"):
+                logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']}")
+                # Wait for tx confirmation with retries
+                for attempt in range(3):
+                    await asyncio.sleep(5 + attempt * 5)  # 5s, 10s, 15s
+                    transfer_tx = await transfer_spl_tokens(
+                        token_mint=result["token_mint"],
+                        recipient_wallet=launch["user_wallet"],
+                        signer_keypair=result["signer_keypair"]
+                    )
+                    if transfer_tx:
+                        launch["transfer_tx"] = transfer_tx
+                        logger.info(f"Tokens transferred to user: {transfer_tx}")
+                        break
+                    logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
+
             save_launches()
 
             credentials = launch.get("twitter_credentials")
@@ -2026,10 +2557,11 @@ class APIServer:
 
             return web.json_response({
                 "success": True,
-                "message": "Token created and agent started!",
+                "message": "Token created and agent started!" + (" Tokens sent to your wallet." if transfer_tx else ""),
                 "launch_id": launch_id,
                 "token_mint": result["token_mint"],
-                "tx_signature": result["tx_signature"]
+                "tx_signature": result["tx_signature"],
+                "transfer_tx": transfer_tx
             })
         else:
             launch["status"] = "failed"
@@ -2112,12 +2644,194 @@ class APIServer:
         if new_cookie:
             agent["twitter_cookie"] = new_cookie
             agent["last_relogin"] = time.time()
+            agent["status"] = "running"
             save_agents()
             return web.json_response({"success": True, "message": "Agent re-login successful", "agent_id": agent_id})
         else:
             agent["status"] = "cookie_expired"
             save_agents()
             return web.json_response({"success": False, "message": "Re-login failed"}, status=400)
+
+    async def launchpad_agent_trigger_post(self, request):
+        """Manually trigger a post for an agent"""
+        agent_id = request.match_info.get('agent_id')
+
+        if agent_id not in running_agents:
+            return web.json_response({"success": False, "message": "Agent not found"}, status=404)
+
+        agent = running_agents[agent_id]
+
+        if not agent.get("twitter_cookie"):
+            return web.json_response({"success": False, "message": "No Twitter cookie, try /refresh first"}, status=400)
+
+        # Bypass cooldown for manual trigger
+        if "last_agent_post" not in agent_runner_state:
+            agent_runner_state["last_agent_post"] = {}
+        agent_runner_state["last_agent_post"][agent_id] = 0
+
+        scanner = PolymarketScanner()
+        result = await process_agent_posting(agent_id, agent, scanner)
+
+        if result:
+            return web.json_response({"success": True, "message": "Post published successfully"})
+        else:
+            return web.json_response({"success": False, "message": "Failed to post, check logs"}, status=500)
+
+    # ==================== PROJECT LAUNCHPAD (Token Only) ====================
+
+    async def projects_launch(self, request):
+        """Submit a new project token launch (no agent)"""
+        try:
+            reader = await request.multipart()
+            fields = {}
+            image_data = None
+
+            async for field in reader:
+                if field.name == 'token_image':
+                    image_data = await field.read()
+                else:
+                    fields[field.name] = await field.text()
+
+            required = ['project_name', 'token_ticker', 'description', 'user_wallet']
+            for f in required:
+                if f not in fields:
+                    return web.json_response({"success": False, "message": f"Missing field: {f}"}, status=400)
+
+            if not image_data:
+                return web.json_response({"success": False, "message": "Missing token image"}, status=400)
+
+            # Check eligibility
+            balance = await check_polyd_balance(fields['user_wallet'])
+            if balance < REQUIRED_POLYD_BALANCE:
+                return web.json_response({
+                    "success": False,
+                    "message": f"Insufficient $POLYD balance. Need {REQUIRED_POLYD_BALANCE:,}, have {balance:,.0f}"
+                }, status=400)
+
+            launch_id = hashlib.sha256(f"{fields['user_wallet']}{time.time()}".encode()).hexdigest()[:16]
+            token_ticker = fields['token_ticker'].replace('$', '').upper()
+            dev_buy_sol = min(float(fields.get('dev_buy_sol', 0) or 0), 85.0)
+
+            pending_launches[launch_id] = {
+                "type": "project",
+                "project_name": fields['project_name'],
+                "token_ticker": token_ticker,
+                "token_name": fields['project_name'],
+                "description": fields['description'],
+                "website": fields.get('website'),
+                "twitter": fields.get('twitter', '').replace('@', ''),
+                "telegram": fields.get('telegram'),
+                "user_wallet": fields['user_wallet'],
+                "image_data": image_data,
+                "dev_buy_sol": dev_buy_sol,
+                "status": "pending_payment",
+                "created_at": time.time()
+            }
+            save_launches()
+
+            return web.json_response({
+                "success": True,
+                "message": f"Launch submitted. Send {LAUNCH_FEE_SOL} SOL to complete.",
+                "launch_id": launch_id,
+                "payment_address": LAUNCHPAD_WALLET_PUBLIC_KEY,
+                "payment_amount": LAUNCH_FEE_SOL
+            })
+
+        except Exception as e:
+            logger.error(f"Project launch error: {e}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    async def projects_confirm(self, request):
+        """Confirm payment and create project token on pump.fun"""
+        launch_id = request.match_info.get('launch_id')
+
+        if launch_id not in pending_launches:
+            return web.json_response({"success": False, "message": "Launch not found"}, status=404)
+
+        launch = pending_launches[launch_id]
+
+        if launch["status"] == "completed":
+            return web.json_response({
+                "success": True,
+                "message": "Token already created",
+                "launch_id": launch_id,
+                "token_mint": launch.get("token_mint"),
+                "tx_signature": launch.get("tx_signature")
+            })
+
+        if launch["status"] not in ["pending_payment", "failed"]:
+            return web.json_response({"success": False, "message": f"Invalid status: {launch['status']}"}, status=400)
+
+        launch["status"] = "creating"
+        logger.info(f"Creating project token: {launch['token_name']} (${launch['token_ticker']})")
+
+        dev_buy_amount = launch.get("dev_buy_sol", 0)
+        logger.info(f"Creating token with dev_buy_sol={dev_buy_amount}")
+
+        result = await create_token_on_pumpfun(
+            name=launch["token_name"],
+            symbol=launch["token_ticker"],
+            description=launch["description"],
+            image_data=launch["image_data"],
+            website=launch.get("website"),
+            twitter=launch.get("twitter"),
+            telegram=launch.get("telegram"),
+            dev_buy_sol=dev_buy_amount
+        )
+
+        if result:
+            launch["status"] = "completed"
+            launch["token_mint"] = result["token_mint"]
+            launch["tx_signature"] = result["tx_signature"]
+
+            # Transfer tokens to user if dev_buy was used
+            transfer_tx = None
+            if dev_buy_amount > 0 and result.get("signer_keypair"):
+                logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']} (dev_buy={dev_buy_amount})")
+                # Wait for tx confirmation with retries
+                for attempt in range(3):
+                    await asyncio.sleep(5 + attempt * 5)  # 5s, 10s, 15s
+                    transfer_tx = await transfer_spl_tokens(
+                        token_mint=result["token_mint"],
+                        recipient_wallet=launch["user_wallet"],
+                        signer_keypair=result["signer_keypair"]
+                    )
+                    if transfer_tx:
+                        launch["transfer_tx"] = transfer_tx
+                        logger.info(f"Tokens transferred to user: {transfer_tx}")
+                        break
+                    logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
+
+            save_launches()
+
+            return web.json_response({
+                "success": True,
+                "message": "Token created!" + (" Tokens sent to your wallet." if transfer_tx else ""),
+                "launch_id": launch_id,
+                "token_mint": result["token_mint"],
+                "tx_signature": result["tx_signature"],
+                "transfer_tx": transfer_tx
+            })
+        else:
+            launch["status"] = "failed"
+            return web.json_response({"success": False, "message": "Failed to create token"}, status=500)
+
+    async def projects_list(self, request):
+        """List all project applications"""
+        try:
+            projects_file = Path(__file__).parent / 'data' / 'projects.json'
+
+            if not projects_file.exists():
+                return web.json_response({"projects": []})
+
+            with open(projects_file, 'r') as f:
+                projects = json.load(f)
+
+            return web.json_response({"projects": projects})
+
+        except Exception as e:
+            logger.error(f"Projects list error: {e}")
+            return web.json_response({"projects": []})
 
     async def start(self):
         runner = web.AppRunner(self.app)

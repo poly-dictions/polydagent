@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>project launchpad - polydictions</title>
+    <link rel="icon" type="image/png" href="../../images/1.png">
+    <link href="../../stylesheet_0.css" rel="stylesheet">
+    <script src="https://bundle.run/buffer@6.0.3"></script>
+    <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
+    <script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fb651e;
+            color: white;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+        a { color: inherit; text-decoration: none; }
+        .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+        .logo { font-size: 24px; font-weight: 800; color: white; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-link {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            transition: all 0.2s;
+        }
+        .nav-link:hover { background: rgba(255, 255, 255, 0.15); }
+        .nav-link.active { background: white; color: #fb651e; border-color: white; }
+        .connect-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #fb651e;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .connect-btn:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); }
+        .hero { text-align: center; padding: 40px 20px 20px; }
+        .hero h1 { font-size: 48px; font-weight: 800; margin-bottom: 8px; text-transform: lowercase; }
+        .hero p { color: rgba(255, 255, 255, 0.7); font-size: 18px; text-transform: lowercase; margin-bottom: 24px; }
+        .hero-stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 20px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-label { color: rgba(255, 255, 255, 0.7); font-size: 12px; text-transform: lowercase; }
+        .form-card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            color: #333;
+        }
+        .form-card h2 { font-size: 20px; margin-bottom: 8px; text-transform: lowercase; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            text-transform: lowercase;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #fb651e;
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .required { color: #fb651e; }
+        .optional { color: #999; font-weight: 400; }
+        .image-hint { font-size: 11px; color: #999; margin-top: 6px; }
+        .image-upload {
+            border: 2px dashed #ddd;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .image-upload:hover { border-color: #fb651e; background: rgba(251, 101, 30, 0.05); }
+        .image-upload svg { display: block; margin: 0 auto 8px auto; width: 48px; height: 48px; color: #ccc; }
+        .image-upload span { display: block; color: #666; font-size: 14px; }
+        .image-upload input { display: none; }
+        .image-preview {
+            max-width: 120px;
+            max-height: 120px;
+            border-radius: 12px;
+            margin-top: 12px;
+            display: none;
+        }
+        .btn-primary {
+            width: 100%;
+            padding: 16px;
+            background: #fb651e;
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { background: #e55a18; transform: translateY(-2px); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-primary svg { width: 20px; height: 20px; }
+        .balance-check {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(251, 101, 30, 0.08);
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .balance-display { font-weight: 600; color: #fb651e; }
+        .balance-status { font-size: 12px; padding: 4px 12px; border-radius: 20px; }
+        .balance-status.ok { background: #d4edda; color: #155724; }
+        .balance-status.insufficient { background: #f8d7da; color: #721c24; }
+        .hidden { display: none !important; }
+        .success-card {
+            background: white;
+            border-radius: 24px;
+            padding: 48px 32px;
+            text-align: center;
+            color: #333;
+        }
+        .success-icon {
+            width: 80px; height: 80px;
+            background: #10b981;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+        .success-icon svg { width: 40px; height: 40px; color: white; }
+        .success-card h2 { font-size: 24px; margin-bottom: 8px; color: #10b981; }
+        .success-card p { color: #666; margin-bottom: 16px; }
+        .result-box {
+            background: #f5f5f5;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .result-label { font-size: 12px; color: #999; margin-bottom: 4px; }
+        @media (max-width: 768px) {
+            .header { flex-direction: column; gap: 16px; padding: 20px; }
+            .nav-links { flex-wrap: wrap; justify-content: center; }
+            .hero h1 { font-size: 32px; }
+            .form-card { margin: 0 10px; padding: 24px; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="../../" class="logo">polydictions</a>
+        <nav class="nav-links">
+            <a href="../../markets/" class="nav-link">markets</a>
+            <a href="../../alerts/" class="nav-link">alerts</a>
+            <a href="../../whales/" class="nav-link">whales</a>
+            <a href="../" class="nav-link active">launchpad</a>
+        </nav>
+        <button class="connect-btn" id="connectWallet">connect wallet</button>
+    </header>
+
+    <section class="hero">
+        <h1>project launchpad</h1>
+        <p>launch your polymarket project token on pump.fun</p>
+
+        <div style="display: flex; justify-content: center; gap: 12px; margin: 20px 0;">
+            <a href="../" class="nav-link">ai agents</a>
+            <a href="./" class="nav-link" style="background: white; color: #fb651e; border-color: white;">projects</a>
+        </div>
+
+    </section>
+
+    <!-- Token Form -->
+    <div class="container" id="formSection">
+        <div class="form-card">
+            <h2>create your project token</h2>
+            <p class="subtitle">launch on pump.fun with polydictions support</p>
+
+            <div class="balance-check" id="balanceCheck">
+                <span>balance:</span>
+                <span class="balance-display" id="balanceDisplay">0 $POLYD</span>
+                <span class="balance-status" id="balanceStatus"></span>
+            </div>
+
+            <form id="tokenForm">
+                <div class="form-group">
+                    <label>project name <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. PolyTrader" id="projectName" required>
+                </div>
+
+                <div class="form-group">
+                    <label>token ticker <span class="required">*</span></label>
+                    <input type="text" placeholder="e.g. PTRADE" id="tokenTicker" required maxlength="10" style="text-transform: uppercase;">
+                </div>
+
+                <div class="form-group">
+                    <label>description <span class="required">*</span></label>
+                    <textarea placeholder="describe your project..." id="description" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>website <span class="optional">(optional)</span></label>
+                    <input type="url" placeholder="https://..." id="website">
+                </div>
+
+                <div class="form-group">
+                    <label>twitter <span class="optional">(optional)</span></label>
+                    <input type="text" placeholder="@yourproject" id="twitter">
+                </div>
+
+                <div class="form-group">
+                    <label>telegram <span class="optional">(optional)</span></label>
+                    <input type="text" placeholder="https://t.me/..." id="telegram">
+                </div>
+
+                <div class="form-group">
+                    <label>token image <span class="required">*</span></label>
+                    <label class="image-upload" id="imageUpload">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <span>upload image</span>
+                        <input type="file" accept="image/png,image/jpeg,image/gif" id="tokenImage">
+                    </label>
+                    <img class="image-preview" id="imagePreview" alt="Preview">
+                    <p class="image-hint">png, jpg, or gif. max 5mb.</p>
+                </div>
+
+                <div class="form-group">
+                    <label>token allocation <span class="optional">(optional)</span></label>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <input type="number" placeholder="0" id="devBuy" min="0" max="85" step="0.01" style="flex: 1;">
+                        <span style="color: #666; font-weight: 500;">SOL</span>
+                    </div>
+                    <p class="image-hint">buy tokens at launch (max 85 SOL). tokens will be sent to your wallet</p>
+                    <div id="totalCost" style="margin-top: 8px; padding: 12px; background: rgba(0,0,0,0.05); border-radius: 12px; font-size: 14px; display: none;">
+                        <span style="color: #666;">total cost:</span>
+                        <span id="totalCostValue" style="font-weight: 600; color: #fb651e; margin-left: 8px;">0.05 SOL</span>
+                    </div>
+                </div>
+
+                <div style="margin: 20px 0; padding: 16px; background: rgba(251, 101, 30, 0.1); border-radius: 16px; border: 1px solid rgba(251, 101, 30, 0.2);">
+                    <p style="font-size: 13px; color: #666; margin-bottom: 8px;">want to claim dev fees from pump.fun?</p>
+                    <a href="https://t.me/simplyclassic69" target="_blank" style="color: #fb651e; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                        </svg>
+                        apply for dev fees payout
+                    </a>
+                </div>
+
+                <button type="submit" class="btn-primary" id="launchBtn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span id="launchBtnText">launch token (0.05 sol)</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Success Section -->
+    <div class="container hidden" id="successSection">
+        <div class="success-card">
+            <div class="success-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h2>token launched!</h2>
+            <p>your project token is now live on pump.fun</p>
+
+            <div class="result-box">
+                <div class="result-label">token mint</div>
+                <div id="resultTokenMint"></div>
+            </div>
+
+            <div class="result-box">
+                <div class="result-label">transaction</div>
+                <div id="resultTxSignature"></div>
+            </div>
+
+            <a href="#" id="pumpLink" target="_blank" class="btn-primary" style="margin-top: 20px;">
+                view on pump.fun
+            </a>
+        </div>
+    </div>
+
+    <script>
+        let CONFIG = {};
+        let walletConnected = false;
+        let userWalletAddress = null;
+        let walletProvider = null;
+        let polydBalance = 0;
+        let selectedImageFile = null;
+
+        async function loadConfig() {
+            const API_URL = window.location.hostname === 'localhost'
+                ? 'http://localhost:8765'
+                : 'https://polydictions-production.up.railway.app';
+            try {
+                const resp = await fetch(`${API_URL}/api/launchpad/config`);
+                const data = await resp.json();
+                CONFIG = {
+                    API_URL,
+                    POLYD_MINT: data.polyd_mint,
+                    REQUIRED_BALANCE: data.required_balance || 1000,
+                    LAUNCH_FEE: data.launch_fee || data.launch_fee_sol || 0.05,
+                    PAYMENT_ADDRESS: data.payment_address,
+                    HELIUS_RPC: data.helius_rpc
+                };
+            } catch (err) {
+                console.error('Failed to load config:', err);
+            }
+        }
+
+        function getPhantomProvider() {
+            if ('phantom' in window) {
+                const provider = window.phantom?.solana;
+                if (provider?.isPhantom) return provider;
+            }
+            return null;
+        }
+
+        async function checkPolydBalance(walletAddress) {
+            try {
+                // Use API endpoint to check balance (uses Helius RPC server-side)
+                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/check-balance?wallet=${walletAddress}`);
+                const data = await resp.json();
+                return data.balance || 0;
+            } catch (err) {
+                console.error('Balance check error:', err);
+                return 0;
+            }
+        }
+
+        async function handleWalletConnected(address) {
+            walletConnected = true;
+            userWalletAddress = address;
+            document.getElementById('connectWallet').textContent = address.slice(0, 4) + '...' + address.slice(-4);
+
+            const balanceCheck = document.getElementById('balanceCheck');
+            const balanceDisplay = document.getElementById('balanceDisplay');
+            const balanceStatus = document.getElementById('balanceStatus');
+            const launchBtn = document.getElementById('launchBtn');
+
+            balanceCheck.style.display = 'flex';
+            balanceDisplay.textContent = 'checking...';
+
+            polydBalance = await checkPolydBalance(address);
+            balanceDisplay.textContent = polydBalance.toLocaleString() + ' $POLYD';
+
+            if (polydBalance >= CONFIG.REQUIRED_BALANCE) {
+                launchBtn.disabled = false;
+                balanceStatus.className = 'balance-status ok';
+                balanceStatus.textContent = 'ready to launch';
+            } else {
+                launchBtn.disabled = true;
+                balanceStatus.className = 'balance-status insufficient';
+                const needed = (CONFIG.REQUIRED_BALANCE - polydBalance).toLocaleString();
+                balanceStatus.innerHTML = `need ${needed} more. <a href="https://pump.fun/coin/${CONFIG.POLYD_MINT}" target="_blank">buy</a>`;
+            }
+        }
+
+        function initWallet() {
+            const provider = getPhantomProvider();
+            if (provider) {
+                walletProvider = provider;
+                provider.on('connect', (publicKey) => handleWalletConnected(publicKey.toString()));
+                provider.on('disconnect', () => {
+                    walletConnected = false;
+                    userWalletAddress = null;
+                    document.getElementById('connectWallet').textContent = 'connect wallet';
+                    document.getElementById('launchBtn').disabled = true;
+                    document.getElementById('balanceCheck').style.display = 'none';
+                });
+                if (provider.isConnected && provider.publicKey) {
+                    handleWalletConnected(provider.publicKey.toString());
+                }
+            }
+
+            document.getElementById('connectWallet').addEventListener('click', async () => {
+                if (!walletProvider) {
+                    window.open('https://phantom.app/', '_blank');
+                    return;
+                }
+                if (walletConnected) {
+                    await walletProvider.disconnect();
+                } else {
+                    await walletProvider.connect();
+                }
+            });
+        }
+
+        // Image upload handler
+        document.getElementById('tokenImage').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('Image too large. Max 5MB.');
+                    return;
+                }
+                selectedImageFile = file;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('imagePreview').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                    document.getElementById('imageUpload').querySelector('svg').style.display = 'none';
+                    document.getElementById('imageUpload').querySelector('span').style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Dev buy handler
+        document.getElementById('devBuy').addEventListener('input', (e) => {
+            const devBuy = parseFloat(e.target.value) || 0;
+            const total = devBuy + 0.05;
+            const totalCostDiv = document.getElementById('totalCost');
+            const totalCostValue = document.getElementById('totalCostValue');
+            const launchBtnText = document.getElementById('launchBtnText');
+
+            if (devBuy > 0) {
+                totalCostDiv.style.display = 'block';
+                totalCostValue.textContent = `${total.toFixed(2)} SOL`;
+                launchBtnText.textContent = `launch token (${total.toFixed(2)} sol)`;
+            } else {
+                totalCostDiv.style.display = 'none';
+                launchBtnText.textContent = 'launch token (0.05 sol)';
+            }
+        });
+
+        // Send payment
+        async function sendPayment(devBuySol = 0) {
+            if (!walletProvider) throw new Error('Wallet not connected');
+
+            const totalSol = CONFIG.LAUNCH_FEE + devBuySol;
+            const connection = new solanaWeb3.Connection(CONFIG.HELIUS_RPC);
+            const fromPubkey = new solanaWeb3.PublicKey(userWalletAddress);
+            const toPubkey = new solanaWeb3.PublicKey(CONFIG.PAYMENT_ADDRESS);
+
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: fromPubkey,
+                    toPubkey: toPubkey,
+                    lamports: Math.round(totalSol * solanaWeb3.LAMPORTS_PER_SOL)
+                })
+            );
+
+            transaction.feePayer = fromPubkey;
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
+
+            let signature;
+            if (walletProvider.signAndSendTransaction) {
+                const result = await walletProvider.signAndSendTransaction(transaction);
+                signature = result.signature || result;
+            } else if (walletProvider.signTransaction) {
+                const signed = await walletProvider.signTransaction(transaction);
+                signature = await connection.sendRawTransaction(signed.serialize());
+            } else {
+                throw new Error('Wallet does not support transaction signing');
+            }
+
+            await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
+            return signature;
+        }
+
+        // Form submit
+        document.getElementById('tokenForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const projectName = document.getElementById('projectName').value.trim();
+            const ticker = document.getElementById('tokenTicker').value.trim();
+            const description = document.getElementById('description').value.trim();
+
+            if (!projectName || !ticker || !description) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            if (!selectedImageFile) {
+                alert('Please upload a token image');
+                return;
+            }
+            if (!walletConnected) {
+                alert('Please connect your wallet first');
+                return;
+            }
+            if (polydBalance < CONFIG.REQUIRED_BALANCE) {
+                alert(`You need at least ${CONFIG.REQUIRED_BALANCE.toLocaleString()} $POLYD to launch`);
+                return;
+            }
+
+            const btn = document.getElementById('launchBtn');
+            const btnText = document.getElementById('launchBtnText');
+            btn.disabled = true;
+            btnText.textContent = 'submitting...';
+
+            try {
+                const devBuyAmount = parseFloat(document.getElementById('devBuy').value) || 0;
+
+                // Submit to API
+                const formData = new FormData();
+                formData.append('project_name', projectName);
+                formData.append('token_ticker', ticker);
+                formData.append('description', description);
+                formData.append('website', document.getElementById('website').value || '');
+                formData.append('twitter', document.getElementById('twitter').value || '');
+                formData.append('telegram', document.getElementById('telegram').value || '');
+                formData.append('user_wallet', userWalletAddress);
+                formData.append('dev_buy_sol', devBuyAmount.toString());
+                formData.append('token_image', selectedImageFile);
+
+                const submitResp = await fetch(`${CONFIG.API_URL}/api/projects/launch`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const submitData = await submitResp.json();
+                if (!submitResp.ok) throw new Error(submitData.message || 'Failed to submit');
+
+                const launchId = submitData.launch_id;
+
+                // Send payment
+                btnText.textContent = 'confirm payment in wallet...';
+                const txSignature = await sendPayment(devBuyAmount);
+
+                // Confirm launch
+                btnText.textContent = 'creating token on pump.fun...';
+                const confirmResp = await fetch(`${CONFIG.API_URL}/api/projects/confirm/${launchId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tx_signature: txSignature })
+                });
+
+                const confirmData = await confirmResp.json();
+                if (!confirmResp.ok) throw new Error(confirmData.message || 'Failed to create token');
+
+                // Success
+                document.getElementById('resultTokenMint').textContent = confirmData.token_mint;
+                document.getElementById('resultTxSignature').textContent = confirmData.tx_signature;
+                document.getElementById('pumpLink').href = `https://pump.fun/coin/${confirmData.token_mint}`;
+
+                document.getElementById('formSection').classList.add('hidden');
+                document.getElementById('successSection').classList.remove('hidden');
+
+            } catch (err) {
+                alert(err.message);
+                btn.disabled = false;
+                btnText.textContent = 'launch token (0.05 sol)';
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadConfig();
+            initWallet();
+        });
+    </script>
+</body>
+</html>

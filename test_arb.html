@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Arbitrage</title>
+</head>
+<body>
+    <h1>Testing Arbitrage Page Access</h1>
+
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        // Test 1: Check API
+        results.innerHTML += '<h2>Test 1: API Access</h2>';
+        fetch('http://localhost:8765/api/arbitrage?sport=nfl&min_diff=1')
+            .then(r => r.json())
+            .then(data => {
+                results.innerHTML += `<p style="color: green;">✓ API working: ${data.opportunities?.length || 0} opportunities found</p>`;
+            })
+            .catch(err => {
+                results.innerHTML += `<p style="color: red;">✗ API failed: ${err.message}</p>`;
+            });
+
+        // Test 2: Check page load
+        results.innerHTML += '<h2>Test 2: Page Access</h2>';
+        fetch('http://localhost:8765/arbitrage/')
+            .then(r => r.text())
+            .then(html => {
+                const hasWalletGate = html.includes('walletGate');
+                const hasSolanaWeb3 = html.includes('solanaWeb3');
+                results.innerHTML += `<p style="color: green;">✓ Page loads (${html.length} bytes)</p>`;
+                results.innerHTML += `<p>- Wallet gate: ${hasWalletGate ? '✓' : '✗'}</p>`;
+                results.innerHTML += `<p>- Solana Web3: ${hasSolanaWeb3 ? '✓' : '✗'}</p>`;
+            })
+            .catch(err => {
+                results.innerHTML += `<p style="color: red;">✗ Page load failed: ${err.message}</p>`;
+            });
+
+        // Test 3: Direct links
+        results.innerHTML += '<h2>Test 3: Direct Access</h2>';
+        results.innerHTML += '<p><a href="http://localhost:8765/arbitrage/" target="_blank">Open Arbitrage (normal)</a></p>';
+        results.innerHTML += '<p><a href="http://localhost:8765/arbitrage/?bypass=true" target="_blank">Open Arbitrage (bypass)</a></p>';
+    </script>
+</body>
+</html>

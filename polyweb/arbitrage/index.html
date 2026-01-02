@@ -18,6 +18,35 @@
 
         console.log('📦 Initializing Reown AppKit for Solana...');
 
+        // Check if user requested fresh connect (clear cache before AppKit init)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('fresh') === 'true') {
+            console.log('Fresh connect requested - clearing wallet cache...');
+            // Clear all wallet-related storage BEFORE AppKit initializes
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (
+                    key.includes('wc@') ||
+                    key.includes('walletconnect') ||
+                    key.includes('@appkit') ||
+                    key.includes('reown') ||
+                    key.includes('W3M') ||
+                    key.includes('wagmi') ||
+                    key.includes('polydictions_wallet')
+                )) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            localStorage.removeItem('wallet_session');
+            try {
+                indexedDB.deleteDatabase('WALLET_CONNECT_V2_INDEXED_DB');
+            } catch (e) {}
+            // Remove ?fresh=true from URL without reload
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+
         const projectId = '84aef5a9c4278e3eb9b9b5e2c208e194';
 
         const metadata = {
@@ -36,7 +65,8 @@
                 analytics: false,
                 email: false,
                 socials: false,
-                allWallets: true
+                allWallets: true,
+                onramp: false
             },
             allWallets: 'SHOW',
             featuredWalletIds: [
@@ -109,13 +139,57 @@
         // Page load complete immediately
         pageLoadComplete = true;
 
+        // Clear all Reown/WalletConnect cached data
+        function clearWalletCache() {
+            // Clear localStorage keys related to Reown/WalletConnect
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (
+                    key.includes('wc@') ||
+                    key.includes('walletconnect') ||
+                    key.includes('@appkit') ||
+                    key.includes('reown') ||
+                    key.includes('W3M') ||
+                    key.includes('wagmi') ||
+                    key.includes('polydictions_wallet')
+                )) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+
+            // Clear IndexedDB for WalletConnect
+            try {
+                indexedDB.deleteDatabase('WALLET_CONNECT_V2_INDEXED_DB');
+            } catch (e) {
+                console.log('Could not clear IndexedDB:', e);
+            }
+
+            clearSession();
+            console.log('Wallet cache cleared');
+        }
+
         // Export for disconnect
         window.clearWalletSession = clearSession;
-        
+        window.clearWalletCache = clearWalletCache;
+
         // DynamicWallet compatibility layer
         window.DynamicWallet = {
             connect: () => modal.open(),
             disconnect: () => modal.disconnect(),
+            // Force disconnect - clears all cached wallet data
+            forceDisconnect: async () => {
+                try {
+                    await modal.disconnect();
+                } catch (e) {
+                    console.error('Disconnect error:', e);
+                }
+                clearWalletCache();
+                currentAddress = null;
+                // Reload page with ?fresh=true to clear cache BEFORE AppKit init
+                window.location.href = window.location.pathname + '?fresh=true';
+            },
             getWalletAddress: () => currentAddress,
             isConnected: () => !!currentAddress,
             getAuthToken: () => currentAddress,
@@ -495,10 +569,10 @@
             <a href="/roadmap/" class="navbar-link">roadmap</a>
         </div>
         <div class="navbar-right">
-            <div class="wallet-indicator" style="display: none;">
+            <div class="wallet-indicator" style="display: none; position: relative;">
                 <div class="status-dot"></div>
                 <span class="wallet-addr">connected</span>
-                <button onclick="disconnectWallet()" style="background: none; border: none; color: var(--text-muted-light); cursor: pointer; font-size: 11px; margin-left: 8px;" title="disconnect">✕</button>
+                <button onclick="showWalletDropdown(event)" style="background: none; border: none; color: var(--text-muted-light); cursor: pointer; font-size: 11px; margin-left: 8px;" title="wallet options">▼</button>
             </div>
             <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -577,18 +651,19 @@
             <h3>how arbitrage works</h3>
             <p>
                 arbitrage opportunities occur when the same event has different prices on different platforms.
-                for example, if an outcome is priced at 45¢ on polymarket but 50¢ on kalshi,
-                you could theoretically buy on polymarket and sell on kalshi for a 5% spread.
+                you can't transfer positions between platforms — instead, you take <strong>opposite sides</strong> on each.
             </p>
             <p>
-                <strong>important:</strong> spreads shown include fees and are net profit estimates.
-                negative spreads mean you'd lose money. positive spreads indicate potential profit.
-                always verify prices on both platforms before trading as they change rapidly.
+                <strong>example:</strong> "team X wins" is priced at 45¢ on polymarket and 50¢ on kalshi.
+                you buy YES on polymarket (45¢) and buy NO on kalshi (50¢). total cost: 95¢.
+                one of them will always pay out $1 — <strong>guaranteed 5¢ profit</strong> regardless of outcome.
             </p>
             <p>
-                <strong>tips:</strong> the best opportunities are in less liquid markets where price discovery is slower.
-                major sports events with high volume tend to have minimal spreads due to efficient pricing.
-                focus on newer markets or niche events for better arbitrage potential.
+                when we say "sell on kalshi" — we mean buying NO there, which is economically the same result.
+            </p>
+            <p>
+                <strong>important:</strong> always verify prices on both platforms before trading as they change rapidly.
+                positive spreads indicate potential profit. negative spreads mean you'd lose money.
             </p>
         </div>
 
@@ -867,6 +942,126 @@
 
             // Show gate again
             lockContent();
+        }
+
+        // Switch wallet - force disconnect and clear all cache
+        async function switchWallet() {
+            try {
+                // Disconnect from server
+                if (walletAddress) {
+                    await fetch(`${API_BASE}/api/wallet/disconnect`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ wallet: walletAddress })
+                    });
+                }
+
+                // Force disconnect clears all cache and reloads
+                if (isDynamicAvailable()) {
+                    await window.DynamicWallet.forceDisconnect();
+                } else {
+                    // Manual cleanup
+                    if (window.clearWalletCache) {
+                        window.clearWalletCache();
+                    }
+                    window.location.reload();
+                }
+            } catch (e) {
+                console.error('Switch wallet error:', e);
+                // Force reload anyway
+                if (window.clearWalletCache) {
+                    window.clearWalletCache();
+                }
+                window.location.reload();
+            }
+        }
+
+        // Show wallet dropdown menu
+        function showWalletDropdown(event) {
+            event.stopPropagation();
+
+            // Remove existing dropdown if any
+            const existingDropdown = document.getElementById('walletDropdown');
+            if (existingDropdown) {
+                existingDropdown.remove();
+                return;
+            }
+
+            const walletIndicator = document.querySelector('.wallet-indicator');
+            const dropdown = document.createElement('div');
+            dropdown.id = 'walletDropdown';
+            dropdown.style.cssText = `
+                position: absolute;
+                top: 100%;
+                right: 0;
+                margin-top: 8px;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+                min-width: 180px;
+                z-index: 1000;
+                overflow: hidden;
+            `;
+            dropdown.innerHTML = `
+                <button id="dropdownDisconnect" style="
+                    width: 100%;
+                    padding: 12px 16px;
+                    background: none;
+                    border: none;
+                    text-align: left;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: #333;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='none'">
+                    🔌 disconnect
+                </button>
+                <button id="dropdownSwitchWallet" style="
+                    width: 100%;
+                    padding: 12px 16px;
+                    background: none;
+                    border: none;
+                    border-top: 1px solid #eee;
+                    text-align: left;
+                    cursor: pointer;
+                    font-size: 13px;
+                    color: #333;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='none'">
+                    🔄 switch wallet
+                </button>
+            `;
+
+            walletIndicator.appendChild(dropdown);
+
+            // Event listeners
+            document.getElementById('dropdownDisconnect').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                dropdown.remove();
+                await disconnectWallet();
+            });
+
+            document.getElementById('dropdownSwitchWallet').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                dropdown.remove();
+                await switchWallet();
+            });
+
+            // Close dropdown when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', function closeDropdown(e) {
+                    if (!dropdown.contains(e.target)) {
+                        dropdown.remove();
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                });
+            }, 100);
         }
 
         // Check existing session on page load
