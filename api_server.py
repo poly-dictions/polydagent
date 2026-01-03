@@ -86,7 +86,7 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 # =============================================================================
 
 LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
-LAUNCHPAD_WALLET_PUBLIC_KEY = "8iWGVEYYvrqArN6ChbbLEgsY3eEHeEbwssswYANq2mgS"
+LAUNCHPAD_WALLET_PUBLIC_KEY = "5JSSPq14p2NeVs2WgwYxPVLXczJdsbZTJaUF4Bo7MvvC"
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
 REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required for launchpad
 LAUNCH_FEE_SOL = 0.05
