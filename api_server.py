@@ -67,7 +67,7 @@ DYNAMIC_JWKS_URL = f"https://app.dynamic.xyz/api/v0/sdk/{DYNAMIC_ENV_ID}/.well-k
 
 # Solana Token Gating
 REQUIRED_TOKEN_MINT = os.getenv('REQUIRED_TOKEN_MINT', 'iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump')
-MIN_TOKEN_BALANCE = int(os.getenv('MIN_TOKEN_BALANCE', '0'))  # TEMP: disabled for screenshot
+MIN_TOKEN_BALANCE = int(os.getenv('MIN_TOKEN_BALANCE', '3000000'))  # 3M $POLYD for arbitrage
 
 # Solana RPC endpoints
 SOLANA_RPC_ENDPOINTS = [
@@ -88,7 +88,7 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
 LAUNCHPAD_WALLET_PUBLIC_KEY = "8iWGVEYYvrqArN6ChbbLEgsY3eEHeEbwssswYANq2mgS"
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
-REQUIRED_POLYD_BALANCE = 1_000  # 1K $POLYD required
+REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required for launchpad
 LAUNCH_FEE_SOL = 0.05
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 HELIUS_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
