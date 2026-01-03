@@ -932,10 +932,10 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
         logger.warning(f"[{agent_id}] No OAuth tokens or cookie available")
         return False
 
-    # Cooldown: don't post more than once per 4 hours
+    # Cooldown: don't post more than once per POST_INTERVAL_HOURS
     last_post = agent_runner_state.get("last_agent_post", {}).get(agent_id, 0)
-    if time.time() - last_post < 4 * 3600:
-        logger.info(f"[{agent_id}] Cooldown active (4h), skipping post")
+    if time.time() - last_post < POST_INTERVAL_HOURS * 3600:
+        logger.info(f"[{agent_id}] Cooldown active ({POST_INTERVAL_HOURS}h), skipping post")
         return False
     logger.info(f"[{agent_id}] Scanning {niche} markets...")
     posted_events = agent_runner_state["posted_events"].get(agent_id, set())
@@ -2853,7 +2853,7 @@ class APIServer:
         agent_runner_state["last_agent_post"][agent_id] = 0
 
         scanner = PolymarketScanner()
-        result = await process_agent_posting(agent_id, agent, scanner)
+        result = await process_agent_posting(agent_id, agent, scanner, self)
 
         if result:
             return web.json_response({"success": True, "message": "Post published successfully"})
