@@ -173,11 +173,15 @@ class TTLCache:
     def __contains__(self, key):
         return self.get(key) is not None
 
-WATCHLIST_FILE = "watchlist.json"
-SESSIONS_FILE = "wallet_sessions.json"
-LAUNCHES_FILE = Path("launches_history.json")
-AGENTS_FILE = Path("agents.json")
-ANSWERED_MENTIONS_FILE = Path("agent_answered_mentions.json")
+# Data directory - uses /app/data on Railway (Volume), otherwise current dir
+DATA_DIR = Path(os.getenv("DATA_DIR", "."))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+WATCHLIST_FILE = DATA_DIR / "watchlist.json"
+SESSIONS_FILE = DATA_DIR / "wallet_sessions.json"
+LAUNCHES_FILE = DATA_DIR / "launches_history.json"
+AGENTS_FILE = DATA_DIR / "agents.json"
+ANSWERED_MENTIONS_FILE = DATA_DIR / "agent_answered_mentions.json"
 
 # Global stores for launchpad
 pending_launches: Dict[str, Dict[str, Any]] = {}
@@ -1468,7 +1472,7 @@ class APIServer:
     def _load_sessions(self):
         """Load sessions from file"""
         try:
-            if Path(SESSIONS_FILE).exists():
+            if SESSIONS_FILE.exists():
                 with open(SESSIONS_FILE, 'r') as f:
                     data = json.load(f)
                     # Filter expired sessions
@@ -2776,7 +2780,6 @@ class APIServer:
     async def launchpad_agents(self, request):
         """List all running agents (without sensitive data)"""
         safe_agents = []
-        twitterapi_key = os.getenv("TWITTERAPI_KEY", "")
 
         for agent in running_agents.values():
             safe_agent = {k: v for k, v in agent.items()
@@ -2786,23 +2789,26 @@ class APIServer:
             safe_agent["has_credentials"] = bool(agent.get("twitter_password"))
             safe_agent["has_oauth"] = bool(agent.get("x_access_token"))
 
-            # Fetch Twitter profile image if we have twitter_username
-            if agent.get("twitter_username") and not safe_agent.get("image_url") and twitterapi_key:
+            # Fetch token image from pump.fun if we have token_mint
+            token_mint = agent.get("token_mint")
+            if token_mint and not safe_agent.get("image_url"):
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.get(
-                            f"https://api.twitterapi.io/twitter/user/info?userName={agent['twitter_username']}",
-                            headers={"x-api-key": twitterapi_key},
+                            f"https://frontend-api.pump.fun/coins/{token_mint}",
                             timeout=aiohttp.ClientTimeout(total=5)
                         ) as resp:
                             if resp.status == 200:
                                 data = await resp.json()
-                                if data.get("data", {}).get("profilePicture"):
-                                    # Get higher res version by replacing _normal with _400x400
-                                    img_url = data["data"]["profilePicture"].replace("_normal", "_400x400")
-                                    safe_agent["image_url"] = img_url
+                                if data.get("image_uri"):
+                                    safe_agent["image_url"] = data["image_uri"]
+                                # Also get market cap and other stats
+                                if data.get("usd_market_cap"):
+                                    safe_agent["market_cap"] = data["usd_market_cap"]
+                                if data.get("complete"):
+                                    safe_agent["bonding_complete"] = data["complete"]
                 except Exception as e:
-                    logger.error(f"Failed to fetch Twitter profile image: {e}")
+                    logger.error(f"Failed to fetch pump.fun token image: {e}")
 
             safe_agents.append(safe_agent)
         return web.json_response({
