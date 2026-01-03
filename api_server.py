@@ -1032,8 +1032,12 @@ async def process_agent_mentions(agent_id: str, agent: Dict, server: 'Polydictio
 
     if not username or (not use_oauth and not twitter_cookie):
         return 0
-    mention_start = agent_runner_state["mention_start_times"].get(agent_id, int(datetime.now().timestamp()))
+    # For new agents, check mentions from 1 hour ago (not current time)
+    default_start = int((datetime.now() - timedelta(hours=1)).timestamp())
+    mention_start = agent_runner_state["mention_start_times"].get(agent_id, default_start)
+    logger.info(f"[{agent_id}] Checking mentions for @{username} since {mention_start}")
     mentions = await TwitterAPI.get_mentions(username, since_time=mention_start)
+    logger.info(f"[{agent_id}] Found {len(mentions)} raw mentions")
     answered = agent_runner_state["answered_mentions"].get(agent_id, set())
     real_mentions = [
         m for m in mentions
