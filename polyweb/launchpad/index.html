@@ -705,52 +705,22 @@
         </div>
     </div>
 
-    <!-- Step 1: Twitter Login -->
+    <!-- Step 1: Connect X -->
     <div class="container" id="step1">
         <div class="form-card">
-            <h2>connect your twitter</h2>
+            <h2>connect your X account</h2>
             <p class="subtitle">your agent will post from this account</p>
 
-            <div class="warning-box">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
-                <div>
-                    <p><strong>credentials stored for re-login:</strong> your twitter credentials will be encrypted and stored on our server so the agent can re-login when the session expires.</p>
-                    <p style="margin-top: 8px;">we strongly recommend creating a <strong>new twitter account</strong> specifically for your agent.</p>
-                </div>
+            <div class="info-box" style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                <p style="margin: 0; font-size: 14px;">click the button below to authorize polydictions to post on your behalf. no passwords needed.</p>
             </div>
 
-            <form id="twitterLoginForm">
-                <div class="form-group">
-                    <label>twitter username <span class="required">*</span></label>
-                    <input type="text" placeholder="e.g. myagent" id="twitterUsername" required>
-                </div>
-
-                <div class="form-group">
-                    <label>email <span class="required">*</span></label>
-                    <input type="email" placeholder="e.g. myagent@gmail.com" id="twitterEmail" required>
-                </div>
-
-                <div class="form-group">
-                    <label>password <span class="required">*</span></label>
-                    <input type="password" placeholder="your twitter password" id="twitterPassword" required>
-                </div>
-
-                <div class="form-group">
-                    <label>2fa secret <span class="required">*</span></label>
-                    <input type="text" placeholder="e.g. JBSWY3DPEHPK3PXP" id="twitter2fa" required>
-                    <small style="color: rgba(255,255,255,0.6); font-size: 11px; margin-top: 4px; display: block;">Your Twitter 2FA secret key (TOTP). Find in Twitter security settings.</small>
-                    <p class="image-hint">makes login more stable. find in twitter settings > security</p>
-                </div>
-
-                <button type="submit" class="btn-primary btn-twitter" id="twitterLoginBtn">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                    </svg>
-                    <span id="twitterLoginBtnText">connect twitter</span>
-                </button>
-            </form>
+            <button type="button" class="btn-primary btn-twitter" id="connectXBtn" onclick="connectWithX()">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                <span id="connectXBtnText">connect with X</span>
+            </button>
         </div>
     </div>
 
@@ -946,15 +916,13 @@
         let userWalletAddress = null;
         let polydBalance = 0;
         let walletProvider = null;
-        let twitterLoginCookie = null;
         let twitterUsername = null;
         let selectedImageFile = null;
-        // Store credentials for re-login capability
-        let twitterCredentials = {
-            email: null,
-            password: null,
-            totp_secret: null
-        };
+        // X OAuth tokens
+        let xAccessToken = null;
+        let xRefreshToken = null;
+        let xUserId = null;
+        let xExpiresIn = 7200;
 
         // Detect API URL
         function getApiUrl() {
@@ -1006,10 +974,67 @@
             if (step === 2 && twitterUsername) {
                 document.getElementById('connectedUsername').textContent = '@' + twitterUsername;
                 document.getElementById('twitterStatus').style.display = 'flex';
-            } else if (step === 2 && !twitterLoginCookie) {
+            } else if (step === 2 && !xAccessToken) {
                 document.getElementById('twitterStatus').style.display = 'none';
             }
         }
+
+        // Connect with X OAuth
+        async function connectWithX() {
+            const btn = document.getElementById('connectXBtn');
+            const btnText = document.getElementById('connectXBtnText');
+
+            btn.disabled = true;
+            btnText.textContent = 'connecting...';
+
+            try {
+                const resp = await fetch(`${CONFIG.API_URL}/api/x/auth`);
+                const data = await resp.json();
+
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to start OAuth');
+                }
+
+                // Open OAuth popup
+                const width = 600;
+                const height = 700;
+                const left = (screen.width - width) / 2;
+                const top = (screen.height - height) / 2;
+
+                window.open(
+                    data.auth_url,
+                    'X OAuth',
+                    `width=${width},height=${height},left=${left},top=${top}`
+                );
+
+                btn.disabled = false;
+                btnText.textContent = 'connect with X';
+
+            } catch (err) {
+                console.error('X OAuth error:', err);
+                alert('Failed to connect: ' + err.message);
+                btn.disabled = false;
+                btnText.textContent = 'connect with X';
+            }
+        }
+
+        // Listen for OAuth callback message
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'x_oauth_success') {
+                console.log('X OAuth success:', event.data);
+
+                xAccessToken = event.data.access_token;
+                xRefreshToken = event.data.refresh_token;
+                xUserId = event.data.user_id;
+                xExpiresIn = event.data.expires_in || 7200;
+                twitterUsername = event.data.username;
+
+                document.getElementById('connectedUsername').textContent = '@' + twitterUsername;
+                document.getElementById('twitterStatus').style.display = 'flex';
+
+                goToStep(2);
+            }
+        });
 
         // Make step indicators clickable
         function setupStepIndicators() {
@@ -1112,88 +1137,6 @@
                     alert('Please install Phantom wallet');
                     window.open('https://phantom.app/', '_blank');
                 }
-            }
-        });
-
-        // Twitter login form
-        document.getElementById('twitterLoginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const btn = document.getElementById('twitterLoginBtn');
-            const btnText = document.getElementById('twitterLoginBtnText');
-            const username = document.getElementById('twitterUsername').value.replace('@', '');
-            const email = document.getElementById('twitterEmail').value;
-            const password = document.getElementById('twitterPassword').value;
-            const totp = document.getElementById('twitter2fa').value;
-
-            // Validate all fields
-            if (!username) {
-                alert('Please enter your Twitter username');
-                document.getElementById('twitterUsername').focus();
-                return;
-            }
-            if (!email) {
-                alert('Please enter your email');
-                document.getElementById('twitterEmail').focus();
-                return;
-            }
-            if (!password) {
-                alert('Please enter your password');
-                document.getElementById('twitterPassword').focus();
-                return;
-            }
-            if (!totp) {
-                alert('2FA secret is required for Twitter login. Find it in your Twitter security settings.');
-                document.getElementById('twitter2fa').focus();
-                return;
-            }
-
-            btn.disabled = true;
-            btnText.innerHTML = '<div class="spinner"></div>';
-
-            try {
-                const resp = await fetch(`${CONFIG.API_URL}/api/launchpad/twitter-login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: username,
-                        email: email,
-                        password: password,
-                        totp_secret: totp || null
-                    })
-                });
-
-                const data = await resp.json();
-
-                if (!resp.ok) {
-                    throw new Error(data.detail || 'Twitter login failed');
-                }
-
-                // Success - store cookie and credentials for re-login
-                twitterLoginCookie = data.login_cookie;
-                twitterUsername = username;
-                twitterCredentials = {
-                    email: email,
-                    password: password,
-                    totp_secret: totp
-                };
-
-                document.getElementById('connectedUsername').textContent = '@' + username;
-
-                // Move to step 2
-                goToStep(2);
-
-                // Check if wallet connected
-                if (!walletConnected) {
-                    alert('Please connect your Solana wallet to continue');
-                }
-
-            } catch (err) {
-                console.error('Twitter login error:', err);
-                alert('Twitter login failed: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btnText.textContent = 'connect twitter';
             }
         });
 
@@ -1307,8 +1250,8 @@
                 return;
             }
 
-            if (!twitterLoginCookie || !twitterUsername) {
-                alert('Please connect Twitter first');
+            if (!xAccessToken || !twitterUsername) {
+                alert('Please connect with X first');
                 goToStep(1);
                 return;
             }
@@ -1342,11 +1285,10 @@
                 formData.append('telegram', document.getElementById('telegram').value || '');
                 formData.append('user_wallet', userWalletAddress);
                 formData.append('twitter_username', twitterUsername);
-                formData.append('twitter_cookie', twitterLoginCookie);
-                // Include credentials for agent re-login capability
-                formData.append('twitter_email', twitterCredentials.email);
-                formData.append('twitter_password', twitterCredentials.password);
-                formData.append('twitter_totp_secret', twitterCredentials.totp_secret);
+                formData.append('x_access_token', xAccessToken);
+                formData.append('x_refresh_token', xRefreshToken);
+                formData.append('x_user_id', xUserId);
+                formData.append('x_expires_in', xExpiresIn.toString());
                 formData.append('token_image', selectedImageFile);
 
                 // Dev buy amount

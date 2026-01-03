@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>agents - polydictions</title>
+    <link rel="icon" type="image/png" href="../../images/1.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fb651e;
+            color: white;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .nav-link.active {
+            background: white;
+            color: #fb651e;
+            border-color: white;
+        }
+
+        .connect-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #fb651e;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .connect-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-1px);
+        }
+
+        /* Hero */
+        .hero {
+            text-align: center;
+            padding: 20px 20px 40px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+
+        .hero p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            text-transform: lowercase;
+        }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin: 20px 0 30px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #fb651e;
+            border-color: white;
+        }
+
+        /* Main Content */
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 60px;
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            text-transform: lowercase;
+        }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-tab:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .filter-tab.active {
+            background: white;
+            color: #fb651e;
+            border-color: white;
+        }
+
+        /* Search */
+        .search-bar {
+            max-width: 500px;
+            margin: 0 auto 30px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 14px 20px;
+            background: white;
+            border: none;
+            border-radius: 24px;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+
+        .search-input::placeholder {
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Agents Grid */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 20px;
+        }
+
+        /* Agent Card */
+        .agent-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            color: #1a1a1a;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .agent-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .agent-header {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .agent-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #fb651e, #ff8c42);
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .agent-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .agent-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .agent-name {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .agent-ticker {
+            color: #fb651e;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .agent-creator {
+            font-size: 13px;
+            color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .creator-badge {
+            width: 16px;
+            height: 16px;
+            background: #1DA1F2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .creator-badge svg {
+            width: 10px;
+            height: 10px;
+        }
+
+        .agent-meta {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+
+        .agent-niche {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        /* Niche colors */
+        .niche-crypto { background: #FEF3C7; color: #B45309; }
+        .niche-politics { background: #DBEAFE; color: #1D4ED8; }
+        .niche-sports { background: #D1FAE5; color: #047857; }
+        .niche-entertainment { background: #EDE9FE; color: #7C3AED; }
+        .niche-tech { background: #CFFAFE; color: #0891B2; }
+        .niche-finance { background: #FCE7F3; color: #BE185D; }
+        .niche-general { background: #F3F4F6; color: #4B5563; }
+
+        .agent-description {
+            font-size: 13px;
+            color: rgba(0, 0, 0, 0.6);
+            line-height: 1.5;
+            margin-bottom: 14px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .agent-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-time {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        .agent-tweets {
+            font-size: 12px;
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        .agent-status {
+            padding: 5px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: lowercase;
+        }
+
+        .agent-status.running {
+            background: #D1FAE5;
+            color: #047857;
+        }
+
+        .agent-status.stopped {
+            background: #FEE2E2;
+            color: #DC2626;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 24px;
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        .empty-state h3 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .empty-state p {
+            margin-bottom: 24px;
+        }
+
+        .empty-state .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            background: #fb651e;
+            color: white;
+            border-radius: 24px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .empty-state .btn:hover {
+            background: #e55a1a;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 80px 20px;
+            background: white;
+            border-radius: 24px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(251, 101, 30, 0.2);
+            border-top-color: #fb651e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .loading p {
+            color: rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            text-transform: lowercase;
+        }
+
+        .footer a {
+            color: white;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 24px;
+                flex-wrap: wrap;
+                gap: 16px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .stats-bar {
+                flex-wrap: wrap;
+                gap: 24px;
+            }
+
+            .main {
+                padding: 0 16px 40px;
+            }
+
+            .agents-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-tabs {
+                justify-content: flex-start;
+                overflow-x: auto;
+                padding-bottom: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="../../" class="logo">polydictions</a>
+        <nav class="nav-links">
+            <a href="../../markets/" class="nav-link">markets</a>
+            <a href="../../alerts/" class="nav-link">alerts</a>
+            <a href="../../whales/" class="nav-link">whales</a>
+            <a href="../" class="nav-link">launchpad</a>
+        </nav>
+        <button class="connect-btn" id="connectWallet">connect wallet</button>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>browse agents</h1>
+        <p>discover AI prediction agents launched on polydictions</p>
+
+        <div class="tab-nav">
+            <a href="../" class="tab-btn">launch agent</a>
+            <a href="./" class="tab-btn active">browse agents</a>
+        </div>
+    </section>
+
+    <main class="main">
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value" id="totalAgents">0</div>
+                <div class="stat-label">total agents</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="runningAgents">0</div>
+                <div class="stat-label">running</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="totalTweets">0</div>
+                <div class="stat-label">tweets</div>
+            </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">all</button>
+            <button class="filter-tab" data-filter="running">live</button>
+            <button class="filter-tab" data-filter="new">new</button>
+            <button class="filter-tab" data-filter="crypto">crypto</button>
+            <button class="filter-tab" data-filter="politics">politics</button>
+            <button class="filter-tab" data-filter="sports">sports</button>
+            <button class="filter-tab" data-filter="entertainment">entertainment</button>
+            <button class="filter-tab" data-filter="tech">tech</button>
+        </div>
+
+        <!-- Search -->
+        <div class="search-bar">
+            <input type="text" class="search-input" placeholder="search agents by name, ticker, or twitter..." id="searchInput">
+        </div>
+
+        <!-- Agents Grid -->
+        <div class="agents-grid" id="agentsGrid">
+            <div class="loading" style="grid-column: 1 / -1;">
+                <div class="spinner"></div>
+                <p>loading agents...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p>built by <a href="https://x.com/polydictions" target="_blank">@polydictions</a></p>
+    </footer>
+
+    <script>
+        // Config
+        const API_URL = window.location.host.includes('localhost') || window.location.host.includes('127.0.0.1')
+            ? 'http://localhost:8765'
+            : 'https://polydictions-production.up.railway.app';
+
+        let agents = [];
+        let currentFilter = 'all';
+
+        // Format time ago
+        function timeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() / 1000) - timestamp);
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        // Format number
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        // Get niche class
+        function getNicheClass(niche) {
+            const nicheMap = {
+                'crypto': 'niche-crypto',
+                'politics': 'niche-politics',
+                'sports': 'niche-sports',
+                'entertainment': 'niche-entertainment',
+                'tech': 'niche-tech',
+                'finance': 'niche-finance',
+                'general': 'niche-general'
+            };
+            return nicheMap[niche] || 'niche-general';
+        }
+
+        // Render agent card
+        function renderAgentCard(agent) {
+            const nicheClass = getNicheClass(agent.agent_niche);
+
+            return `
+                <div class="agent-card" onclick="window.open('https://pump.fun/coin/${agent.token_mint}', '_blank')">
+                    <div class="agent-header">
+                        <div class="agent-avatar">
+                            ${agent.image_url ? `<img src="${agent.image_url}" alt="${agent.token_ticker}" onerror="this.style.display='none'">` : ''}
+                        </div>
+                        <div class="agent-info">
+                            <div class="agent-name">
+                                $${agent.token_ticker || 'TOKEN'}
+                            </div>
+                            <div class="agent-creator">
+                                <span class="creator-badge">
+                                    <svg viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                                </span>
+                                @${agent.twitter_username || 'unknown'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="agent-meta">
+                        <span class="agent-niche ${nicheClass}">${agent.agent_niche || 'general'}</span>
+                        <span class="agent-status ${agent.status || 'running'}">${agent.status || 'running'}</span>
+                    </div>
+
+                    <div class="agent-description">${agent.description || 'AI prediction agent powered by polydictions'}</div>
+
+                    <div class="agent-footer">
+                        <span class="agent-time">${agent.started_at ? timeAgo(agent.started_at) : 'recently'}</span>
+                        <span class="agent-tweets">${agent.tweet_count || 0} tweets</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Filter agents
+        function filterAgents() {
+            let filtered = [...agents];
+            const search = document.getElementById('searchInput').value.toLowerCase();
+
+            // Apply filter
+            if (currentFilter === 'running') {
+                filtered = filtered.filter(a => a.status === 'running');
+            } else if (currentFilter === 'new') {
+                filtered = filtered.sort((a, b) => (b.started_at || 0) - (a.started_at || 0)).slice(0, 20);
+            } else if (['crypto', 'politics', 'sports', 'entertainment', 'tech', 'finance'].includes(currentFilter)) {
+                filtered = filtered.filter(a => a.agent_niche === currentFilter);
+            }
+
+            // Apply search
+            if (search) {
+                filtered = filtered.filter(a =>
+                    (a.token_ticker?.toLowerCase().includes(search)) ||
+                    (a.token_name?.toLowerCase().includes(search)) ||
+                    (a.twitter_username?.toLowerCase().includes(search)) ||
+                    (a.description?.toLowerCase().includes(search))
+                );
+            }
+
+            return filtered;
+        }
+
+        // Render grid
+        function renderGrid() {
+            const grid = document.getElementById('agentsGrid');
+            const filtered = filterAgents();
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <h3>no agents found</h3>
+                        <p>be the first to launch an AI prediction agent</p>
+                        <a href="../" class="btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            launch agent
+                        </a>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(renderAgentCard).join('');
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('totalAgents').textContent = agents.length;
+            document.getElementById('runningAgents').textContent = agents.filter(a => a.status === 'running').length;
+            document.getElementById('totalTweets').textContent = formatNumber(agents.reduce((sum, a) => sum + (a.tweet_count || 0), 0));
+        }
+
+        // Load agents
+        async function loadAgents() {
+            try {
+                const resp = await fetch(`${API_URL}/api/launchpad/agents`);
+                const data = await resp.json();
+                agents = data.agents || [];
+                updateStats();
+                renderGrid();
+            } catch (err) {
+                console.error('Failed to load agents:', err);
+                document.getElementById('agentsGrid').innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <h3>no agents yet</h3>
+                        <p>be the first to launch an AI prediction agent</p>
+                        <a href="../" class="btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            launch agent
+                        </a>
+                    </div>
+                `;
+            }
+        }
+
+        // Filter tab click
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentFilter = tab.dataset.filter;
+                renderGrid();
+            });
+        });
+
+        // Search input
+        document.getElementById('searchInput').addEventListener('input', renderGrid);
+
+        // Init
+        loadAgents();
+
+        // Refresh every 30 seconds
+        setInterval(loadAgents, 30000);
+    </script>
+</body>
+</html>

@@ -98,6 +98,12 @@ TWITTERAPI_KEY = os.getenv("TWITTERAPI_KEY", "")
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 TWITTER_PROXY = os.getenv("TWITTER_PROXY", "")
 
+# X OAuth 2.0 config
+X_CLIENT_ID = os.getenv("X_CLIENT_ID", "")
+X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET", "")
+X_REDIRECT_URI = os.getenv("X_REDIRECT_URI", "https://polydictions-production.up.railway.app/api/x/callback")
+X_OAUTH_STATES: Dict[str, Dict] = {}  # state -> {code_verifier, created_at, launch_id}
+
 # Agent runner config
 POLYMARKET_API = "https://gamma-api.polymarket.com"
 POLYFACTUAL_API_URL = "https://deep-research-api.thekid-solana.workers.dev/answer"
@@ -183,6 +189,16 @@ agent_runner_state = {
     "mention_start_times": {}
 }
 
+# Global server reference for OAuth token refresh
+_server_instance: 'APIServer' = None
+
+def set_server_instance(server: 'APIServer'):
+    global _server_instance
+    _server_instance = server
+
+def get_server_instance() -> 'APIServer':
+    return _server_instance
+
 # Lazy init encryption (after SESSION_SECRET is validated)
 _fernet = None
 def get_fernet():
@@ -252,9 +268,12 @@ def save_agents():
         save_data = {}
         for aid, agent in running_agents.items():
             agent_data = {}
+            # Fields that need encryption
+            sensitive_fields = ["twitter_cookie", "twitter_password", "twitter_email",
+                               "twitter_username_cred", "twitter_totp_secret",
+                               "x_access_token", "x_refresh_token"]
             for k, v in agent.items():
-                if k in ["twitter_cookie", "twitter_password", "twitter_email",
-                         "twitter_username_cred", "twitter_totp_secret"]:
+                if k in sensitive_fields:
                     agent_data[f"{k}_encrypted"] = encrypt_credential(v) if v else ""
                 else:
                     agent_data[k] = v
@@ -282,7 +301,76 @@ def save_answered_mentions(answered: Dict[str, Set[str]]):
         logger.error(f"Error saving answered mentions: {e}")
 
 # =============================================================================
-# TWITTER API CLASS
+# X OAUTH API CLASS (Official API)
+# =============================================================================
+
+class XOAuthAPI:
+    """Post tweets using X OAuth 2.0 access tokens (official API)"""
+
+    @staticmethod
+    async def post_tweet(access_token: str, text: str, reply_to: str = None) -> Optional[str]:
+        """Post a tweet using OAuth access token"""
+        payload = {"text": text}
+        if reply_to:
+            payload["reply"] = {"in_reply_to_tweet_id": reply_to}
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.twitter.com/2/tweets",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as resp:
+                    result = await resp.json()
+                    if resp.status == 201:
+                        tweet_id = result.get("data", {}).get("id")
+                        logger.info(f"X OAuth tweet posted: {tweet_id}")
+                        return tweet_id
+                    else:
+                        logger.error(f"X OAuth tweet error: {result}")
+                        return None
+        except Exception as e:
+            logger.error(f"X OAuth post_tweet error: {e}")
+            return None
+
+    @staticmethod
+    async def post_reply(access_token: str, tweet_id: str, text: str) -> Optional[str]:
+        """Post a reply using OAuth access token"""
+        return await XOAuthAPI.post_tweet(access_token, text, reply_to=tweet_id)
+
+    @staticmethod
+    async def post_thread(access_token: str, tweets: List[str]) -> Optional[str]:
+        """Post a thread of tweets using OAuth access token"""
+        if not tweets:
+            return None
+
+        # Post first tweet
+        first_tweet_id = await XOAuthAPI.post_tweet(access_token, tweets[0])
+        if not first_tweet_id:
+            return None
+
+        logger.info(f"X OAuth thread started: {first_tweet_id}")
+
+        # Post replies
+        current_reply_to = first_tweet_id
+        for i, tweet_text in enumerate(tweets[1:], start=2):
+            await asyncio.sleep(2)
+            reply_id = await XOAuthAPI.post_reply(access_token, current_reply_to, tweet_text)
+            if reply_id:
+                logger.info(f"X OAuth thread tweet {i}: {reply_id}")
+                current_reply_to = reply_id
+            else:
+                logger.warning(f"X OAuth thread tweet {i} failed")
+                break
+
+        return first_tweet_id
+
+
+# =============================================================================
+# TWITTER API CLASS (TwitterAPI.io - legacy)
 # =============================================================================
 
 class TwitterAPI:
@@ -829,11 +917,19 @@ async def try_agent_relogin(agent: Dict) -> Optional[str]:
         logger.info("Re-login successful!")
     return new_cookie
 
-async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketScanner) -> bool:
+async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketScanner, server: 'PolydictionsServer' = None) -> bool:
     niche = agent.get("agent_niche", "general")
     custom_prompt = agent.get("custom_prompt", "")
+
+    # Check for OAuth tokens first, fallback to cookie
+    x_access_token = agent.get("x_access_token")
+    x_refresh_token = agent.get("x_refresh_token")
     twitter_cookie = agent.get("twitter_cookie")
-    if not twitter_cookie:
+
+    use_oauth = bool(x_access_token and x_refresh_token)
+
+    if not use_oauth and not twitter_cookie:
+        logger.warning(f"[{agent_id}] No OAuth tokens or cookie available")
         return False
 
     # Cooldown: don't post more than once per 4 hours
@@ -873,7 +969,18 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
     thread_tweets = create_tweet_thread(agent, market, analysis)
     logger.info(f"[{agent_id}] Posting thread with {len(thread_tweets)} tweets...")
 
-    tweet_id = await TwitterAPI.post_thread(twitter_cookie, thread_tweets)
+    tweet_id = None
+
+    if use_oauth and server:
+        # Use X OAuth API
+        valid_token = await server.get_valid_x_token(agent)
+        if valid_token:
+            tweet_id = await XOAuthAPI.post_thread(valid_token, thread_tweets)
+        else:
+            logger.error(f"[{agent_id}] Failed to get valid OAuth token")
+    elif twitter_cookie:
+        # Fallback to legacy TwitterAPI.io
+        tweet_id = await TwitterAPI.post_thread(twitter_cookie, thread_tweets)
 
     if tweet_id:
         logger.info(f"[{agent_id}] Thread posted! First ID: {tweet_id}")
@@ -886,32 +993,40 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
         agent_runner_state["last_agent_post"][agent_id] = time.time()
         return True
     else:
-        # Try re-login and retry posting
-        new_cookie = await try_agent_relogin(agent)
-        if new_cookie:
-            agent["twitter_cookie"] = new_cookie
-            running_agents[agent_id]["twitter_cookie"] = new_cookie
-            save_agents()
-            # Retry posting with new cookie
-            tweet_id = await TwitterAPI.post_thread(new_cookie, thread_tweets)
-            if tweet_id:
-                logger.info(f"[{agent_id}] Thread posted after re-login! First ID: {tweet_id}")
-                if agent_id not in agent_runner_state["posted_events"]:
-                    agent_runner_state["posted_events"][agent_id] = set()
-                agent_runner_state["posted_events"][agent_id].add(market['event_id'])
-                # Record last post time for cooldown
-                if "last_agent_post" not in agent_runner_state:
-                    agent_runner_state["last_agent_post"] = {}
-                agent_runner_state["last_agent_post"][agent_id] = time.time()
-                return True
+        # If OAuth failed, we can't recover (no re-login for OAuth)
+        # For legacy cookie, try re-login
+        if not use_oauth and twitter_cookie:
+            new_cookie = await try_agent_relogin(agent)
+            if new_cookie:
+                agent["twitter_cookie"] = new_cookie
+                running_agents[agent_id]["twitter_cookie"] = new_cookie
+                save_agents()
+                # Retry posting with new cookie
+                tweet_id = await TwitterAPI.post_thread(new_cookie, thread_tweets)
+                if tweet_id:
+                    logger.info(f"[{agent_id}] Thread posted after re-login! First ID: {tweet_id}")
+                    if agent_id not in agent_runner_state["posted_events"]:
+                        agent_runner_state["posted_events"][agent_id] = set()
+                    agent_runner_state["posted_events"][agent_id].add(market['event_id'])
+                    # Record last post time for cooldown
+                    if "last_agent_post" not in agent_runner_state:
+                        agent_runner_state["last_agent_post"] = {}
+                    agent_runner_state["last_agent_post"][agent_id] = time.time()
+                    return True
         return False
 
-async def process_agent_mentions(agent_id: str, agent: Dict) -> int:
+async def process_agent_mentions(agent_id: str, agent: Dict, server: 'PolydictionsServer' = None) -> int:
     username = agent.get("twitter_username")
     twitter_cookie = agent.get("twitter_cookie")
     custom_prompt = agent.get("custom_prompt", "")
     ticker = agent.get("token_ticker", "")
-    if not username or not twitter_cookie:
+
+    # Check for OAuth tokens
+    x_access_token = agent.get("x_access_token")
+    x_refresh_token = agent.get("x_refresh_token")
+    use_oauth = bool(x_access_token and x_refresh_token)
+
+    if not username or (not use_oauth and not twitter_cookie):
         return 0
     mention_start = agent_runner_state["mention_start_times"].get(agent_id, int(datetime.now().timestamp()))
     mentions = await TwitterAPI.get_mentions(username, since_time=mention_start)
@@ -935,18 +1050,30 @@ async def process_agent_mentions(agent_id: str, agent: Dict) -> int:
         reply = await AIAnalyzer.generate_reply(question=question, facts=facts or "", custom_prompt=custom_prompt, ticker=ticker)
         if not reply:
             continue
-        result = await TwitterAPI.post_reply(twitter_cookie, tweet_id, reply)
+
+        result = None
+        if use_oauth and server:
+            # Use X OAuth API for reply
+            valid_token = await server.get_valid_x_token(agent)
+            if valid_token:
+                result = await XOAuthAPI.post_reply(valid_token, tweet_id, reply)
+        elif twitter_cookie:
+            # Fallback to legacy TwitterAPI.io
+            result = await TwitterAPI.post_reply(twitter_cookie, tweet_id, reply)
+
         if result:
             if agent_id not in agent_runner_state["answered_mentions"]:
                 agent_runner_state["answered_mentions"][agent_id] = set()
             agent_runner_state["answered_mentions"][agent_id].add(tweet_id)
             answered_count += 1
         else:
-            new_cookie = await try_agent_relogin(agent)
-            if new_cookie:
-                agent["twitter_cookie"] = new_cookie
-                running_agents[agent_id]["twitter_cookie"] = new_cookie
-                save_agents()
+            # Only try re-login for legacy cookie method
+            if not use_oauth and twitter_cookie:
+                new_cookie = await try_agent_relogin(agent)
+                if new_cookie:
+                    agent["twitter_cookie"] = new_cookie
+                    running_agents[agent_id]["twitter_cookie"] = new_cookie
+                    save_agents()
         await asyncio.sleep(5)
     agent_runner_state["mention_start_times"][agent_id] = int(datetime.now().timestamp())
     return answered_count
@@ -966,15 +1093,16 @@ async def agent_runner_loop():
                 continue
             current_time = datetime.now().timestamp()
             should_post = (current_time - agent_runner_state["last_post_time"]) >= (POST_INTERVAL_HOURS * 3600)
+            server = get_server_instance()
             for agent_id, agent in list(running_agents.items()):
                 if agent.get("status") != "running":
                     continue
                 try:
-                    mentions_answered = await process_agent_mentions(agent_id, agent)
+                    mentions_answered = await process_agent_mentions(agent_id, agent, server)
                     if mentions_answered > 0:
                         save_answered_mentions(agent_runner_state["answered_mentions"])
                     if should_post:
-                        await process_agent_posting(agent_id, agent, scanner)
+                        await process_agent_posting(agent_id, agent, scanner, server)
                     await asyncio.sleep(5)
                 except Exception as e:
                     logger.error(f"[{agent_id}] Error: {e}")
@@ -984,9 +1112,10 @@ async def agent_runner_loop():
             logger.error(f"[AgentRunner] Main loop error: {e}")
         await asyncio.sleep(MENTION_CHECK_INTERVAL)
 
-async def start_agent(launch_id: str, launch: Dict[str, Any], credentials: Dict[str, str] = None):
+async def start_agent(launch_id: str, launch: Dict[str, Any], credentials: Dict[str, str] = None, oauth_tokens: Dict[str, Any] = None):
     agent_id = launch_id
     running_agents[agent_id] = {
+        "agent_id": agent_id,  # Store agent_id for token refresh
         "launch_id": launch_id,
         "token_ticker": launch["token_ticker"],
         "token_mint": launch.get("token_mint"),
@@ -1006,11 +1135,20 @@ async def start_agent(launch_id: str, launch: Dict[str, Any], credentials: Dict[
             "twitter_password": credentials.get("password"),
             "twitter_totp_secret": credentials.get("totp_secret")
         })
+    # Add OAuth tokens if provided
+    if oauth_tokens:
+        running_agents[agent_id].update({
+            "x_access_token": oauth_tokens.get("access_token"),
+            "x_refresh_token": oauth_tokens.get("refresh_token"),
+            "x_token_expires_at": time.time() + oauth_tokens.get("expires_in", 7200),
+            "x_user_id": oauth_tokens.get("user_id")
+        })
+        logger.info(f"Agent {agent_id} using X OAuth tokens")
     save_agents()
     logger.info(f"Agent {agent_id} started for @{launch.get('twitter_username')}")
 
-    # First post on agent launch
-    if running_agents[agent_id].get("twitter_cookie"):
+    # First post on agent launch - check for OAuth or cookie
+    if running_agents[agent_id].get("x_access_token") or running_agents[agent_id].get("twitter_cookie"):
         asyncio.create_task(first_agent_post(agent_id))
 
     return agent_id
@@ -1022,12 +1160,13 @@ async def first_agent_post(agent_id: str):
         return
     agent = running_agents[agent_id]
     scanner = PolymarketScanner()
+    server = get_server_instance()
     logger.info(f"[{agent_id}] Making first post on launch...")
     # Set last_post to 0 to bypass cooldown for first post
     if "last_agent_post" not in agent_runner_state:
         agent_runner_state["last_agent_post"] = {}
     agent_runner_state["last_agent_post"][agent_id] = 0
-    await process_agent_posting(agent_id, agent, scanner)
+    await process_agent_posting(agent_id, agent, scanner, server)
 
 # =============================================================================
 # LAUNCHPAD HELPERS
@@ -1381,6 +1520,11 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/agents", self.launchpad_agents)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
+
+        # X OAuth 2.0
+        self.app.router.add_get("/api/x/auth", self.x_oauth_start)
+        self.app.router.add_get("/api/x/callback", self.x_oauth_callback)
+        self.app.router.add_post("/api/x/tweet", self.x_post_tweet)
 
         # Project launchpad (token only, no agent)
         self.app.router.add_post("/api/projects/launch", self.projects_launch)
@@ -2415,10 +2559,20 @@ class APIServer:
                 else:
                     fields[field.name] = await field.text()
 
-            # Validate required fields
+            # Check if using OAuth or legacy credentials
+            has_oauth = bool(fields.get('x_access_token') and fields.get('x_refresh_token'))
+            has_credentials = bool(fields.get('twitter_cookie'))
+
+            # Validate required fields - OAuth or credentials required
             required = ['token_ticker', 'agent_niche', 'description', 'profile_link',
-                       'wallet_address', 'user_wallet', 'twitter_username', 'twitter_cookie',
-                       'twitter_email', 'twitter_password', 'twitter_totp_secret']
+                       'wallet_address', 'user_wallet', 'twitter_username']
+
+            if not has_oauth and not has_credentials:
+                return web.json_response({
+                    "success": False,
+                    "message": "Either X OAuth tokens or Twitter credentials required"
+                }, status=400)
+
             for f in required:
                 if f not in fields:
                     return web.json_response({"success": False, "message": f"Missing field: {f}"}, status=400)
@@ -2445,7 +2599,7 @@ class APIServer:
             # Parse dev buy amount (max 85 SOL)
             dev_buy_sol = min(float(fields.get('dev_buy_sol', 0) or 0), 85.0)
 
-            pending_launches[launch_id] = {
+            launch_data = {
                 "token_ticker": token_ticker,
                 "token_name": token_name,
                 "agent_niche": fields['agent_niche'],
@@ -2456,19 +2610,33 @@ class APIServer:
                 "website": fields.get('website'),
                 "telegram": fields.get('telegram'),
                 "twitter_username": fields['twitter_username'].replace('@', ''),
-                "twitter_cookie": fields['twitter_cookie'],
-                "twitter_credentials": {
-                    "username": fields['twitter_username'].replace('@', ''),
-                    "email": fields['twitter_email'],
-                    "password": fields['twitter_password'],
-                    "totp_secret": fields['twitter_totp_secret']
-                },
                 "user_wallet": fields['user_wallet'],
                 "image_data": image_data,
                 "dev_buy_sol": dev_buy_sol,
                 "status": "pending_payment",
                 "created_at": time.time()
             }
+
+            # Add OAuth tokens if provided
+            if has_oauth:
+                launch_data["x_oauth"] = {
+                    "access_token": fields['x_access_token'],
+                    "refresh_token": fields['x_refresh_token'],
+                    "user_id": fields.get('x_user_id', ''),
+                    "expires_in": int(fields.get('x_expires_in', 7200))
+                }
+                logger.info(f"Launch {launch_id} using X OAuth for @{fields['twitter_username']}")
+            else:
+                # Legacy credentials
+                launch_data["twitter_cookie"] = fields.get('twitter_cookie', '')
+                launch_data["twitter_credentials"] = {
+                    "username": fields['twitter_username'].replace('@', ''),
+                    "email": fields.get('twitter_email', ''),
+                    "password": fields.get('twitter_password', ''),
+                    "totp_secret": fields.get('twitter_totp_secret', '')
+                }
+
+            pending_launches[launch_id] = launch_data
             save_launches()
 
             return web.json_response({
@@ -2542,8 +2710,10 @@ class APIServer:
 
             save_launches()
 
+            # Start agent with OAuth or legacy credentials
             credentials = launch.get("twitter_credentials")
-            await start_agent(launch_id, launch, credentials=credentials)
+            oauth_tokens = launch.get("x_oauth")
+            await start_agent(launch_id, launch, credentials=credentials, oauth_tokens=oauth_tokens)
 
             return web.json_response({
                 "success": True,
@@ -2606,11 +2776,34 @@ class APIServer:
     async def launchpad_agents(self, request):
         """List all running agents (without sensitive data)"""
         safe_agents = []
+        twitterapi_key = os.getenv("TWITTERAPI_KEY", "")
+
         for agent in running_agents.values():
             safe_agent = {k: v for k, v in agent.items()
                           if k not in ["twitter_cookie", "twitter_password", "twitter_email",
-                                       "twitter_username_cred", "twitter_totp_secret"]}
+                                       "twitter_username_cred", "twitter_totp_secret",
+                                       "x_access_token", "x_refresh_token"]}
             safe_agent["has_credentials"] = bool(agent.get("twitter_password"))
+            safe_agent["has_oauth"] = bool(agent.get("x_access_token"))
+
+            # Fetch Twitter profile image if we have twitter_username
+            if agent.get("twitter_username") and not safe_agent.get("image_url") and twitterapi_key:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(
+                            f"https://api.twitterapi.io/twitter/user/info?userName={agent['twitter_username']}",
+                            headers={"x-api-key": twitterapi_key},
+                            timeout=aiohttp.ClientTimeout(total=5)
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("data", {}).get("profilePicture"):
+                                    # Get higher res version by replacing _normal with _400x400
+                                    img_url = data["data"]["profilePicture"].replace("_normal", "_400x400")
+                                    safe_agent["image_url"] = img_url
+                except Exception as e:
+                    logger.error(f"Failed to fetch Twitter profile image: {e}")
+
             safe_agents.append(safe_agent)
         return web.json_response({
             "total": len(running_agents),
@@ -2666,6 +2859,283 @@ class APIServer:
             return web.json_response({"success": True, "message": "Post published successfully"})
         else:
             return web.json_response({"success": False, "message": "Failed to post, check logs"}, status=500)
+
+    # ==================== X OAuth 2.0 ====================
+
+    async def x_oauth_start(self, request):
+        """Start X OAuth 2.0 flow with PKCE"""
+        launch_id = request.query.get('launch_id', '')
+
+        if not X_CLIENT_ID:
+            return web.json_response({"success": False, "message": "X OAuth not configured"}, status=500)
+
+        # Generate PKCE code verifier and challenge
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode()).digest()
+        ).decode().rstrip('=')
+
+        # Generate state
+        state = secrets.token_urlsafe(32)
+
+        # Store for callback
+        X_OAUTH_STATES[state] = {
+            "code_verifier": code_verifier,
+            "created_at": time.time(),
+            "launch_id": launch_id
+        }
+
+        # Clean old states (older than 10 minutes)
+        now = time.time()
+        for s in list(X_OAUTH_STATES.keys()):
+            if now - X_OAUTH_STATES[s]["created_at"] > 600:
+                del X_OAUTH_STATES[s]
+
+        # Build authorization URL
+        scopes = "tweet.read tweet.write users.read offline.access"
+        auth_url = (
+            f"https://x.com/i/oauth2/authorize"
+            f"?response_type=code"
+            f"&client_id={X_CLIENT_ID}"
+            f"&redirect_uri={X_REDIRECT_URI}"
+            f"&scope={scopes.replace(' ', '%20')}"
+            f"&state={state}"
+            f"&code_challenge={code_challenge}"
+            f"&code_challenge_method=S256"
+        )
+
+        return web.json_response({
+            "success": True,
+            "auth_url": auth_url
+        })
+
+    async def x_oauth_callback(self, request):
+        """Handle X OAuth 2.0 callback"""
+        code = request.query.get('code')
+        state = request.query.get('state')
+        error = request.query.get('error')
+
+        if error:
+            return web.Response(
+                text=f"<html><body><h1>Authorization failed</h1><p>{error}</p></body></html>",
+                content_type="text/html"
+            )
+
+        if not code or not state:
+            return web.Response(
+                text="<html><body><h1>Missing code or state</h1></body></html>",
+                content_type="text/html"
+            )
+
+        if state not in X_OAUTH_STATES:
+            return web.Response(
+                text="<html><body><h1>Invalid or expired state</h1></body></html>",
+                content_type="text/html"
+            )
+
+        state_data = X_OAUTH_STATES.pop(state)
+        code_verifier = state_data["code_verifier"]
+        launch_id = state_data.get("launch_id", "")
+
+        # Exchange code for tokens
+        try:
+            async with aiohttp.ClientSession() as session:
+                auth_header = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
+                async with session.post(
+                    "https://api.twitter.com/2/oauth2/token",
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Authorization": f"Basic {auth_header}"
+                    },
+                    data={
+                        "code": code,
+                        "grant_type": "authorization_code",
+                        "redirect_uri": X_REDIRECT_URI,
+                        "code_verifier": code_verifier
+                    }
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        logger.error(f"X OAuth token error: {error_text}")
+                        return web.Response(
+                            text=f"<html><body><h1>Token exchange failed</h1><pre>{error_text}</pre></body></html>",
+                            content_type="text/html"
+                        )
+
+                    token_data = await resp.json()
+                    access_token = token_data.get("access_token")
+                    refresh_token = token_data.get("refresh_token")
+                    expires_in = token_data.get("expires_in", 7200)
+
+                # Get user info
+                async with session.get(
+                    "https://api.twitter.com/2/users/me",
+                    headers={"Authorization": f"Bearer {access_token}"}
+                ) as user_resp:
+                    if user_resp.status == 200:
+                        user_data = await user_resp.json()
+                        username = user_data.get("data", {}).get("username", "unknown")
+                        user_id = user_data.get("data", {}).get("id", "")
+                        name = user_data.get("data", {}).get("name", "")
+                    else:
+                        username = "unknown"
+                        user_id = ""
+                        name = ""
+
+            # Store tokens (you can save to database/file)
+            logger.info(f"X OAuth success: @{username} (ID: {user_id})")
+
+            # Return success page with tokens in localStorage
+            html = f"""
+            <html>
+            <head><title>Connected to X</title></head>
+            <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fb651e;">
+                <div style="background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px;">
+                    <h1 style="color: #1da1f2;">Connected!</h1>
+                    <p>Logged in as <strong>@{username}</strong></p>
+                    <p style="color: #666; font-size: 14px;">You can close this window</p>
+                </div>
+                <script>
+                    // Store tokens in opener window
+                    if (window.opener) {{
+                        window.opener.postMessage({{
+                            type: 'x_oauth_success',
+                            username: '{username}',
+                            user_id: '{user_id}',
+                            name: '{name}',
+                            access_token: '{access_token}',
+                            refresh_token: '{refresh_token}',
+                            expires_in: {expires_in},
+                            launch_id: '{launch_id}'
+                        }}, '*');
+                        setTimeout(() => window.close(), 2000);
+                    }}
+                </script>
+            </body>
+            </html>
+            """
+            return web.Response(text=html, content_type="text/html")
+
+        except Exception as e:
+            logger.error(f"X OAuth callback error: {e}")
+            return web.Response(
+                text=f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>",
+                content_type="text/html"
+            )
+
+    async def x_post_tweet(self, request):
+        """Post a tweet using X OAuth 2.0 access token"""
+        try:
+            data = await request.json()
+            access_token = data.get("access_token")
+            text = data.get("text")
+            reply_to = data.get("reply_to")
+
+            if not access_token or not text:
+                return web.json_response({"success": False, "message": "Missing access_token or text"}, status=400)
+
+            payload = {"text": text}
+            if reply_to:
+                payload["reply"] = {"in_reply_to_tweet_id": reply_to}
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "https://api.twitter.com/2/tweets",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                ) as resp:
+                    result = await resp.json()
+
+                    if resp.status == 201:
+                        tweet_id = result.get("data", {}).get("id")
+                        return web.json_response({
+                            "success": True,
+                            "tweet_id": tweet_id,
+                            "message": "Tweet posted successfully"
+                        })
+                    else:
+                        logger.error(f"X API tweet error: {result}")
+                        return web.json_response({
+                            "success": False,
+                            "message": result.get("detail", "Failed to post tweet"),
+                            "error": result
+                        }, status=resp.status)
+
+        except Exception as e:
+            logger.error(f"x_post_tweet error: {e}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    # ==================== X OAuth Token Management ====================
+
+    async def refresh_x_token(self, refresh_token: str) -> Optional[Dict]:
+        """Refresh X OAuth access token using refresh_token"""
+        if not X_CLIENT_ID or not X_CLIENT_SECRET:
+            logger.error("X OAuth not configured")
+            return None
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                auth_header = base64.b64encode(f"{X_CLIENT_ID}:{X_CLIENT_SECRET}".encode()).decode()
+                async with session.post(
+                    "https://api.twitter.com/2/oauth2/token",
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Authorization": f"Basic {auth_header}"
+                    },
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": refresh_token
+                    }
+                ) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        logger.error(f"X token refresh error: {error_text}")
+                        return None
+
+                    token_data = await resp.json()
+                    return {
+                        "access_token": token_data.get("access_token"),
+                        "refresh_token": token_data.get("refresh_token"),  # X gives new refresh token
+                        "expires_in": token_data.get("expires_in", 7200)
+                    }
+        except Exception as e:
+            logger.error(f"X token refresh exception: {e}")
+            return None
+
+    async def get_valid_x_token(self, agent: Dict) -> Optional[str]:
+        """Get valid X access token for agent, refreshing if needed"""
+        access_token = agent.get("x_access_token")
+        refresh_token = agent.get("x_refresh_token")
+        expires_at = agent.get("x_token_expires_at", 0)
+
+        if not access_token or not refresh_token:
+            return None
+
+        # Check if token is expired (with 5 min buffer)
+        if time.time() > expires_at - 300:
+            logger.info(f"X token expired for @{agent.get('twitter_username')}, refreshing...")
+            new_tokens = await self.refresh_x_token(refresh_token)
+            if new_tokens:
+                agent["x_access_token"] = new_tokens["access_token"]
+                agent["x_refresh_token"] = new_tokens["refresh_token"]
+                agent["x_token_expires_at"] = time.time() + new_tokens["expires_in"]
+                # Save updated tokens
+                agent_id = agent.get("agent_id")
+                if agent_id and agent_id in running_agents:
+                    running_agents[agent_id]["x_access_token"] = new_tokens["access_token"]
+                    running_agents[agent_id]["x_refresh_token"] = new_tokens["refresh_token"]
+                    running_agents[agent_id]["x_token_expires_at"] = agent["x_token_expires_at"]
+                    save_agents()
+                logger.info(f"X token refreshed for @{agent.get('twitter_username')}")
+                return new_tokens["access_token"]
+            else:
+                logger.error(f"Failed to refresh X token for @{agent.get('twitter_username')}")
+                return None
+
+        return access_token
 
     # ==================== PROJECT LAUNCHPAD (Token Only) ====================
 
@@ -2843,6 +3313,7 @@ if __name__ == "__main__":
     load_agents()
 
     server = APIServer()
+    set_server_instance(server)
 
     async def main():
         runner = await server.start()
