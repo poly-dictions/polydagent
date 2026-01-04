@@ -1156,8 +1156,8 @@
             }
         });
 
-        // Sign and send transaction from server (or fallback to creating new one)
-        async function signAndSendPayment(paymentAddress, paymentAmount, serializedTx = null, txBlockhash = null) {
+        // Send payment to dev wallet (always creates fresh transaction to paymentAddress)
+        async function signAndSendPayment(paymentAddress, paymentAmount) {
             if (!walletProvider) {
                 throw new Error('Wallet not connected');
             }
@@ -1166,28 +1166,19 @@
             const fromPubkey = new solanaWeb3.PublicKey(userWalletAddress);
             const toPubkey = new solanaWeb3.PublicKey(paymentAddress);
 
-            let transaction;
+            // Always create transaction to the dev wallet address from server
+            const transaction = new solanaWeb3.Transaction().add(
+                solanaWeb3.SystemProgram.transfer({
+                    fromPubkey: fromPubkey,
+                    toPubkey: toPubkey,
+                    lamports: Math.round(paymentAmount * solanaWeb3.LAMPORTS_PER_SOL)
+                })
+            );
+            transaction.feePayer = fromPubkey;
+            const { blockhash } = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = blockhash;
 
-            if (serializedTx && txBlockhash) {
-                // Use transaction from server - reconstruct it
-                const messageBytes = Uint8Array.from(atob(serializedTx), c => c.charCodeAt(0));
-                transaction = solanaWeb3.Transaction.populate(
-                    solanaWeb3.Message.from(messageBytes),
-                    []
-                );
-            } else {
-                // Fallback - create new transaction
-                transaction = new solanaWeb3.Transaction().add(
-                    solanaWeb3.SystemProgram.transfer({
-                        fromPubkey: fromPubkey,
-                        toPubkey: toPubkey,
-                        lamports: Math.round(paymentAmount * solanaWeb3.LAMPORTS_PER_SOL)
-                    })
-                );
-                transaction.feePayer = fromPubkey;
-                const { blockhash } = await connection.getLatestBlockhash();
-                transaction.recentBlockhash = blockhash;
-            }
+            console.log('Sending', paymentAmount, 'SOL to dev wallet:', paymentAddress);
 
             let signature;
             if (walletProvider.signAndSendTransaction) {
@@ -1316,14 +1307,12 @@
                 const launchId = submitData.launch_id;
                 const paymentAddress = submitData.payment_address;
                 const paymentAmount = submitData.payment_amount;
-                const serializedTx = submitData.transaction || null;
-                const txBlockhash = submitData.blockhash || null;
-                console.log('Launch submitted:', launchId, 'payment to:', paymentAddress);
+                console.log('Launch submitted:', launchId, 'payment to dev wallet:', paymentAddress);
 
-                // Step 2: Sign and send payment transaction
+                // Step 2: Sign and send payment transaction to dev wallet
                 btnText.textContent = 'confirm payment in wallet...';
 
-                const txSignature = await signAndSendPayment(paymentAddress, paymentAmount, serializedTx, txBlockhash);
+                const txSignature = await signAndSendPayment(paymentAddress, paymentAmount);
                 console.log('Payment sent:', txSignature);
 
                 // Step 3: Confirm launch (creates token + starts agent)
