@@ -3043,7 +3043,7 @@ class APIServer:
                 "token_mint": result["token_mint"],
                 "tx_signature": result["tx_signature"],
                 "transfer_tx": transfer_tx,
-                "token_wallet": token_wallet_public
+                "dev_wallet": dev_wallet_public
             })
         else:
             launch["status"] = "failed"
