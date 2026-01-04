@@ -254,7 +254,7 @@ def save_launches():
             # Fields to exclude
             exclude_fields = ["image_data", "twitter_cookie", "twitter_password", "twitter_credentials"]
             # Sensitive fields to encrypt
-            sensitive_fields = ["token_wallet_private", "x_access_token", "x_refresh_token"]
+            sensitive_fields = ["token_wallet_private", "dev_wallet_private", "x_access_token", "x_refresh_token"]
 
             for k, v in launch.items():
                 if k in exclude_fields:
@@ -2851,16 +2851,80 @@ class APIServer:
                     "totp_secret": fields.get('twitter_totp_secret', '')
                 }
 
+            # Generate dev wallet for this launch
+            from solders.keypair import Keypair
+            from solders.pubkey import Pubkey
+            from solders.system_program import transfer, TransferParams
+            from solders.transaction import Transaction
+            from solders.message import Message
+            from solders.hash import Hash
+
+            dev_wallet = generate_new_wallet()
+            launch_data["dev_wallet_public"] = dev_wallet["public_key"]
+            launch_data["dev_wallet_private"] = dev_wallet["private_key"]
+
+            # Total payment: 0.05 fee + dev_buy amount + 0.01 buffer for tx fees
+            total_payment = LAUNCH_FEE_SOL + dev_buy_sol + 0.01
+            launch_data["total_payment"] = total_payment
+
             pending_launches[launch_id] = launch_data
             save_launches()
 
-            return web.json_response({
-                "success": True,
-                "message": f"Launch submitted. Send {LAUNCH_FEE_SOL} SOL to complete.",
-                "launch_id": launch_id,
-                "payment_address": LAUNCHPAD_WALLET_PUBLIC_KEY,
-                "payment_amount": LAUNCH_FEE_SOL
-            })
+            # Create transaction for user to sign
+            try:
+                async with aiohttp.ClientSession() as session:
+                    # Get blockhash
+                    payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "getLatestBlockhash",
+                        "params": [{"commitment": "finalized"}]
+                    }
+                    async with session.post(HELIUS_RPC, json=payload) as resp:
+                        result = await resp.json()
+                        blockhash_str = result.get("result", {}).get("value", {}).get("blockhash")
+
+                    if not blockhash_str:
+                        raise Exception("Failed to get blockhash")
+
+                    # Create transfer instruction from user wallet to dev wallet
+                    from_pubkey = Pubkey.from_string(fields['user_wallet'])
+                    to_pubkey = Pubkey.from_string(dev_wallet["public_key"])
+                    lamports = int(total_payment * 1_000_000_000)
+
+                    # Create transfer instruction
+                    transfer_ix = transfer(TransferParams(
+                        from_pubkey=from_pubkey,
+                        to_pubkey=to_pubkey,
+                        lamports=lamports
+                    ))
+
+                    # Create message and transaction
+                    blockhash = Hash.from_string(blockhash_str)
+                    msg = Message.new_with_blockhash([transfer_ix], from_pubkey, blockhash)
+
+                    # Serialize message for frontend to sign
+                    serialized_msg = base64.b64encode(bytes(msg)).decode('utf-8')
+
+                    return web.json_response({
+                        "success": True,
+                        "message": f"Sign transaction to pay {total_payment:.3f} SOL",
+                        "launch_id": launch_id,
+                        "payment_address": dev_wallet["public_key"],
+                        "payment_amount": total_payment,
+                        "transaction": serialized_msg,
+                        "blockhash": blockhash_str
+                    })
+            except Exception as tx_err:
+                logger.error(f"Failed to create transaction: {tx_err}")
+                # Fallback - return payment address for manual send
+                return web.json_response({
+                    "success": True,
+                    "message": f"Send {total_payment:.3f} SOL to complete.",
+                    "launch_id": launch_id,
+                    "payment_address": dev_wallet["public_key"],
+                    "payment_amount": total_payment
+                })
         except Exception as e:
             logger.error(f"Launch submit error: {e}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
@@ -2886,36 +2950,43 @@ class APIServer:
         if launch["status"] not in ["pending_payment", "failed"]:
             return web.json_response({"success": False, "message": f"Invalid status: {launch['status']}"}, status=400)
 
-        launch["status"] = "creating"
-        logger.info(f"Creating token: {launch['token_name']} (${launch['token_ticker']})")
-
-        # Generate unique wallet for this token
+        # Use the dev wallet that was generated at submit time
         from solders.keypair import Keypair
-        new_wallet = generate_new_wallet()
-        token_wallet_keypair = new_wallet["keypair"]
-        token_wallet_public = new_wallet["public_key"]
-        token_wallet_private = new_wallet["private_key"]
+        dev_wallet_private = launch.get("dev_wallet_private")
+        dev_wallet_public = launch.get("dev_wallet_public")
 
-        logger.info(f"Generated new wallet for token: {token_wallet_public}")
-
-        # Calculate SOL needed: launch fee (0.02) + dev buy + priority fee buffer
-        sol_needed = 0.02 + launch.get("dev_buy_sol", 0) + 0.005  # 0.005 buffer for priority fees
-
-        # Transfer SOL from main wallet to new wallet
-        main_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
-        sol_transfer_tx = await transfer_sol(main_keypair, token_wallet_public, sol_needed)
-
-        if not sol_transfer_tx:
+        if not dev_wallet_private or not dev_wallet_public:
             launch["status"] = "failed"
-            logger.error(f"Failed to transfer SOL to new wallet")
-            return web.json_response({"success": False, "message": "Failed to fund token wallet"}, status=500)
+            return web.json_response({"success": False, "message": "Dev wallet not found"}, status=500)
 
-        logger.info(f"SOL transferred to new wallet: {sol_transfer_tx}")
+        dev_wallet_keypair = Keypair.from_base58_string(dev_wallet_private)
 
-        # Wait for SOL transfer confirmation
-        await asyncio.sleep(3)
+        # Check if dev wallet has received payment
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [dev_wallet_public]}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                balance_lamports = result.get("result", {}).get("value", 0)
+                balance_sol = balance_lamports / 1_000_000_000
 
-        # Create token with the new wallet
+        # Minimum required: 0.02 for pump.fun + some buffer
+        min_required = 0.025
+        if balance_sol < min_required:
+            return web.json_response({
+                "success": False,
+                "message": f"Insufficient payment. Dev wallet has {balance_sol:.4f} SOL, need at least {min_required} SOL"
+            }, status=400)
+
+        launch["status"] = "creating"
+        logger.info(f"Creating token: {launch['token_name']} (${launch['token_ticker']}) with {balance_sol:.4f} SOL")
+
+        # Calculate dev buy: total balance - 0.02 launch fee - 0.05 our fee - 0.005 buffer
+        available_for_dev_buy = max(0, balance_sol - 0.02 - LAUNCH_FEE_SOL - 0.005)
+        actual_dev_buy = min(available_for_dev_buy, launch.get("dev_buy_sol", 0))
+
+        logger.info(f"Dev buy amount: {actual_dev_buy:.4f} SOL")
+
+        # Create token with the dev wallet
         result = await create_token_on_pumpfun(
             name=launch["token_name"],
             symbol=launch["token_ticker"],
@@ -2924,22 +2995,19 @@ class APIServer:
             website=launch.get("website"),
             twitter=launch.get("twitter_username"),
             telegram=launch.get("telegram"),
-            dev_buy_sol=launch.get("dev_buy_sol", 0),
-            custom_signer_keypair=token_wallet_keypair
+            dev_buy_sol=actual_dev_buy,
+            custom_signer_keypair=dev_wallet_keypair
         )
 
         if result:
             launch["status"] = "completed"
             launch["token_mint"] = result["token_mint"]
             launch["tx_signature"] = result["tx_signature"]
-            # Save the token wallet info (encrypted)
-            launch["token_wallet_public"] = token_wallet_public
-            launch["token_wallet_private"] = token_wallet_private
-            launch["sol_funding_tx"] = sol_transfer_tx
+            launch["actual_dev_buy"] = actual_dev_buy
 
             # Transfer tokens to user if dev_buy was used
             transfer_tx = None
-            if launch.get("dev_buy_sol", 0) > 0:
+            if actual_dev_buy > 0:
                 logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']}")
                 # Wait for tx confirmation with retries
                 for attempt in range(3):
@@ -2947,7 +3015,7 @@ class APIServer:
                     transfer_tx = await transfer_spl_tokens(
                         token_mint=result["token_mint"],
                         recipient_wallet=launch["user_wallet"],
-                        signer_keypair=token_wallet_keypair
+                        signer_keypair=dev_wallet_keypair
                     )
                     if transfer_tx:
                         launch["transfer_tx"] = transfer_tx
@@ -2955,9 +3023,9 @@ class APIServer:
                         break
                     logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
 
-            # Refund remaining SOL from dev wallet
+            # Refund remaining SOL from dev wallet to our wallet
             await asyncio.sleep(2)
-            refund_tx = await refund_remaining_sol(token_wallet_keypair)
+            refund_tx = await refund_remaining_sol(dev_wallet_keypair)
             if refund_tx:
                 launch["sol_refund_tx"] = refund_tx
 
