@@ -87,8 +87,9 @@ JWKS_CACHE_TTL = 3600  # 1 hour
 
 LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
 LAUNCHPAD_WALLET_PUBLIC_KEY = "5JSSPq14p2NeVs2WgwYxPVLXczJdsbZTJaUF4Bo7MvvC"
+SOL_REFUND_WALLET = "EFpXYkq36Kt5ovdT7TF8Nzj5Sg9YfyDBQ1xxjLPkYUTy"  # Wallet to receive leftover SOL
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
-REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required for launchpad
+REQUIRED_POLYD_BALANCE = 1_000  # 1K $POLYD required for launchpad (temporary)
 LAUNCH_FEE_SOL = 0.05
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 HELIUS_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
@@ -182,6 +183,7 @@ SESSIONS_FILE = DATA_DIR / "wallet_sessions.json"
 LAUNCHES_FILE = DATA_DIR / "launches_history.json"
 AGENTS_FILE = DATA_DIR / "agents.json"
 ANSWERED_MENTIONS_FILE = DATA_DIR / "agent_answered_mentions.json"
+AGENT_POSTED_EVENTS_FILE = DATA_DIR / "agent_posted_events.json"
 
 # Global stores for launchpad
 pending_launches: Dict[str, Dict[str, Any]] = {}
@@ -233,6 +235,12 @@ def load_launches():
                 data = json.load(f)
                 for lid, launch in data.items():
                     launch.pop("image_data", None)
+                    # Decrypt encrypted fields
+                    for key in list(launch.keys()):
+                        if key.endswith("_encrypted"):
+                            original_key = key.replace("_encrypted", "")
+                            launch[original_key] = decrypt_credential(launch[key])
+                            del launch[key]
                 pending_launches = data
                 logger.info(f"Loaded {len(pending_launches)} launches from file")
         except Exception as e:
@@ -242,9 +250,20 @@ def save_launches():
     try:
         save_data = {}
         for lid, launch in pending_launches.items():
-            save_data[lid] = {k: v for k, v in launch.items()
-                           if k not in ["image_data", "twitter_cookie", "twitter_password",
-                                       "twitter_credentials"]}
+            launch_data = {}
+            # Fields to exclude
+            exclude_fields = ["image_data", "twitter_cookie", "twitter_password", "twitter_credentials"]
+            # Sensitive fields to encrypt
+            sensitive_fields = ["token_wallet_private", "x_access_token", "x_refresh_token"]
+
+            for k, v in launch.items():
+                if k in exclude_fields:
+                    continue
+                if k in sensitive_fields and v:
+                    launch_data[f"{k}_encrypted"] = encrypt_credential(v)
+                else:
+                    launch_data[k] = v
+            save_data[lid] = launch_data
         with open(LAUNCHES_FILE, "w") as f:
             json.dump(save_data, f, indent=2)
     except Exception as e:
@@ -303,6 +322,25 @@ def save_answered_mentions(answered: Dict[str, Set[str]]):
             json.dump({k: list(v) for k, v in answered.items()}, f)
     except Exception as e:
         logger.error(f"Error saving answered mentions: {e}")
+
+def load_posted_events() -> Dict[str, Set[str]]:
+    """Load posted events for each agent from file"""
+    if AGENT_POSTED_EVENTS_FILE.exists():
+        try:
+            with open(AGENT_POSTED_EVENTS_FILE, 'r') as f:
+                data = json.load(f)
+                return {k: set(v) for k, v in data.items()}
+        except:
+            pass
+    return {}
+
+def save_posted_events(posted: Dict[str, Set[str]]):
+    """Save posted events for each agent to file"""
+    try:
+        with open(AGENT_POSTED_EVENTS_FILE, 'w') as f:
+            json.dump({k: list(v) for k, v in posted.items()}, f)
+    except Exception as e:
+        logger.error(f"Error saving posted events: {e}")
 
 # =============================================================================
 # X OAUTH API CLASS (Official API)
@@ -521,6 +559,20 @@ class PolymarketScanner:
             logger.error(f"Fetch error: {e}")
         return []
 
+    # Exclusion lists to prevent category overlap
+    NICHE_EXCLUDE = {
+        "sports": ["russia", "ukraine", "war", "ceasefire", "trump", "biden", "election", "congress", "senate",
+                   "israel", "gaza", "palestine", "iran", "tariff", "bitcoin", "crypto", "ethereum", "solana",
+                   "president", "democrat", "republican", "governor"],
+        "crypto": ["trump", "biden", "election", "president", "nba", "nfl", "mlb", "soccer", "football game",
+                   "championship", "playoffs", "super bowl", "world cup"],
+        "politics": ["nba", "nfl", "mlb", "nhl", "soccer match", "championship game", "playoffs", "super bowl",
+                     "bitcoin price", "ethereum price", "solana price", "crypto market"],
+        "entertainment": ["trump", "biden", "election", "president", "bitcoin", "ethereum", "nba", "nfl"],
+        "tech": ["trump", "biden", "election", "president", "nba", "nfl", "mlb", "championship"],
+        "finance": ["trump election", "biden election", "nba", "nfl", "mlb", "championship", "playoffs"]
+    }
+
     def filter_by_niche(self, events: List[Dict], niche: str) -> List[Dict]:
         if niche == "general":
             return events
@@ -528,12 +580,16 @@ class PolymarketScanner:
         if not keywords:
             logger.warning(f"No keywords for niche '{niche}', returning all events")
             return events
+        exclude_list = self.NICHE_EXCLUDE.get(niche, [])
         filtered = []
         for event in events:
             title = event.get("title", "").lower()
             description = event.get("description", "").lower()
             combined = f"{title} {description}"
             if any(kw in combined for kw in keywords):
+                # Exclude events that match exclusion list for this niche
+                if exclude_list and any(ex in combined for ex in exclude_list):
+                    continue
                 filtered.append(event)
         logger.info(f"Filtered {len(events)} events by niche '{niche}': {len(filtered)} matches")
         # If niche is specified but no matches found, return empty list (don't fallback to all)
@@ -620,7 +676,11 @@ class AIAnalyzer:
                 logger.warning(f"FactsAI error: {e}")
 
         # Use Anthropic Claude for structured analysis
+        from datetime import datetime
+        current_date = datetime.now().strftime("%B %d, %Y")
         prompt = f"""You are a prediction market analyst. Analyze this market and return a JSON response.
+
+IMPORTANT: Today's date is {current_date}. Use this date when referencing current events.
 
 Market: {title}
 Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%
@@ -991,6 +1051,7 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
         if agent_id not in agent_runner_state["posted_events"]:
             agent_runner_state["posted_events"][agent_id] = set()
         agent_runner_state["posted_events"][agent_id].add(market['event_id'])
+        save_posted_events(agent_runner_state["posted_events"])
         # Record last post time for cooldown
         if "last_agent_post" not in agent_runner_state:
             agent_runner_state["last_agent_post"] = {}
@@ -1012,6 +1073,7 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
                     if agent_id not in agent_runner_state["posted_events"]:
                         agent_runner_state["posted_events"][agent_id] = set()
                     agent_runner_state["posted_events"][agent_id].add(market['event_id'])
+                    save_posted_events(agent_runner_state["posted_events"])
                     # Record last post time for cooldown
                     if "last_agent_post" not in agent_runner_state:
                         agent_runner_state["last_agent_post"] = {}
@@ -1094,6 +1156,7 @@ async def agent_runner_loop():
     logger.info("=" * 50)
     scanner = PolymarketScanner()
     agent_runner_state["answered_mentions"] = load_answered_mentions()
+    agent_runner_state["posted_events"] = load_posted_events()
     while True:
         try:
             if not running_agents:
@@ -1234,9 +1297,147 @@ async def upload_metadata_to_ipfs(name: str, symbol: str, description: str, imag
         logger.error(f"Error uploading to IPFS: {e}")
         return None
 
+def generate_new_wallet() -> Dict[str, str]:
+    """Generate a new Solana wallet keypair"""
+    from solders.keypair import Keypair
+    keypair = Keypair()
+    return {
+        "public_key": str(keypair.pubkey()),
+        "private_key": str(keypair),
+        "keypair": keypair
+    }
+
+
+async def transfer_sol(from_keypair, to_pubkey: str, amount_sol: float) -> Optional[str]:
+    """Transfer SOL from one wallet to another"""
+    try:
+        from solders.pubkey import Pubkey
+        from solders.system_program import transfer, TransferParams
+        from solders.transaction import Transaction
+        from solders.message import Message
+        from solders.hash import Hash
+
+        to_pubkey_obj = Pubkey.from_string(to_pubkey)
+        lamports = int(amount_sol * 1_000_000_000)  # Convert SOL to lamports
+
+        # Get recent blockhash
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash"}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                blockhash = result["result"]["value"]["blockhash"]
+
+        # Create transfer instruction
+        transfer_ix = transfer(TransferParams(
+            from_pubkey=from_keypair.pubkey(),
+            to_pubkey=to_pubkey_obj,
+            lamports=lamports
+        ))
+
+        # Build and sign transaction
+        msg = Message.new_with_blockhash([transfer_ix], from_keypair.pubkey(), Hash.from_string(blockhash))
+        tx = Transaction.new_unsigned(msg)
+        tx.sign([from_keypair], Hash.from_string(blockhash))
+
+        # Serialize transaction to base64
+        tx_bytes = bytes(tx)
+        tx_base64 = base64.b64encode(tx_bytes).decode('utf-8')
+
+        # Send transaction via JSON-RPC
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sendTransaction",
+                "params": [
+                    tx_base64,
+                    {"encoding": "base64", "preflightCommitment": "confirmed"}
+                ]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                if "error" in result:
+                    logger.error(f"SOL transfer error: {result['error']}")
+                    return None
+                tx_signature = result.get("result")
+                logger.info(f"SOL transfer successful: {tx_signature}")
+                return tx_signature
+    except Exception as e:
+        logger.error(f"Error transferring SOL: {e}")
+        return None
+
+
+async def refund_remaining_sol(from_keypair) -> Optional[str]:
+    """Transfer all remaining SOL (minus rent) from dev wallet to refund wallet"""
+    try:
+        from solders.pubkey import Pubkey
+        from solders.system_program import transfer, TransferParams
+        from solders.transaction import Transaction
+        from solders.message import Message
+        from solders.hash import Hash
+
+        # Get current balance
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [str(from_keypair.pubkey())]}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                balance_lamports = result.get("result", {}).get("value", 0)
+
+        # Keep 5000 lamports for rent, send the rest
+        fee_lamports = 5000  # Transaction fee buffer
+        send_lamports = balance_lamports - fee_lamports
+
+        if send_lamports <= 0:
+            logger.info(f"No SOL to refund (balance: {balance_lamports} lamports)")
+            return None
+
+        to_pubkey_obj = Pubkey.from_string(SOL_REFUND_WALLET)
+
+        # Get recent blockhash
+        async with aiohttp.ClientSession() as session:
+            payload = {"jsonrpc": "2.0", "id": 1, "method": "getLatestBlockhash"}
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                blockhash = result["result"]["value"]["blockhash"]
+
+        # Create transfer instruction
+        transfer_ix = transfer(TransferParams(
+            from_pubkey=from_keypair.pubkey(),
+            to_pubkey=to_pubkey_obj,
+            lamports=send_lamports
+        ))
+
+        # Build and sign transaction
+        msg = Message.new_with_blockhash([transfer_ix], from_keypair.pubkey(), Hash.from_string(blockhash))
+        tx = Transaction.new_unsigned(msg)
+        tx.sign([from_keypair], Hash.from_string(blockhash))
+
+        # Serialize and send
+        tx_bytes = bytes(tx)
+        tx_base64 = base64.b64encode(tx_bytes).decode('utf-8')
+
+        async with aiohttp.ClientSession() as session:
+            payload = {
+                "jsonrpc": "2.0", "id": 1, "method": "sendTransaction",
+                "params": [tx_base64, {"encoding": "base64", "preflightCommitment": "confirmed"}]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                if "error" in result:
+                    logger.error(f"SOL refund error: {result['error']}")
+                    return None
+                tx_signature = result.get("result")
+                sol_amount = send_lamports / 1_000_000_000
+                logger.info(f"SOL refund successful: {sol_amount:.6f} SOL -> {SOL_REFUND_WALLET[:8]}... tx: {tx_signature}")
+                return tx_signature
+    except Exception as e:
+        logger.error(f"Error refunding SOL: {e}")
+        return None
+
+
 async def create_token_on_pumpfun(name: str, symbol: str, description: str, image_data: bytes,
                                    website: str = None, twitter: str = None, telegram: str = None,
-                                   dev_buy_sol: float = 0) -> Optional[Dict[str, str]]:
+                                   dev_buy_sol: float = 0, custom_signer_keypair = None) -> Optional[Dict[str, str]]:
     try:
         from solders.keypair import Keypair
         from solders.transaction import VersionedTransaction
@@ -1244,11 +1445,16 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
         from solders.rpc.requests import SendVersionedTransaction
         from solders.rpc.config import RpcSendTransactionConfig
 
-        if not LAUNCHPAD_WALLET_PRIVATE_KEY:
-            logger.error("LAUNCHPAD_WALLET_PRIVATE_KEY not set")
-            return None
+        # Use custom signer if provided, otherwise use main launchpad wallet
+        if custom_signer_keypair:
+            signer_keypair = custom_signer_keypair
+            logger.info(f"Using custom signer wallet: {signer_keypair.pubkey()}")
+        else:
+            if not LAUNCHPAD_WALLET_PRIVATE_KEY:
+                logger.error("LAUNCHPAD_WALLET_PRIVATE_KEY not set")
+                return None
+            signer_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
 
-        signer_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
         mint_keypair = Keypair()
 
         metadata_uri = await upload_metadata_to_ipfs(
@@ -1528,6 +1734,7 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/agents", self.launchpad_agents)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
+        self.app.router.add_get("/api/admin/wallets", self.admin_wallets)
 
         # X OAuth 2.0
         self.app.router.add_get("/api/x/auth", self.x_oauth_start)
@@ -2682,6 +2889,33 @@ class APIServer:
         launch["status"] = "creating"
         logger.info(f"Creating token: {launch['token_name']} (${launch['token_ticker']})")
 
+        # Generate unique wallet for this token
+        from solders.keypair import Keypair
+        new_wallet = generate_new_wallet()
+        token_wallet_keypair = new_wallet["keypair"]
+        token_wallet_public = new_wallet["public_key"]
+        token_wallet_private = new_wallet["private_key"]
+
+        logger.info(f"Generated new wallet for token: {token_wallet_public}")
+
+        # Calculate SOL needed: launch fee (0.02) + dev buy + priority fee buffer
+        sol_needed = 0.02 + launch.get("dev_buy_sol", 0) + 0.005  # 0.005 buffer for priority fees
+
+        # Transfer SOL from main wallet to new wallet
+        main_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
+        sol_transfer_tx = await transfer_sol(main_keypair, token_wallet_public, sol_needed)
+
+        if not sol_transfer_tx:
+            launch["status"] = "failed"
+            logger.error(f"Failed to transfer SOL to new wallet")
+            return web.json_response({"success": False, "message": "Failed to fund token wallet"}, status=500)
+
+        logger.info(f"SOL transferred to new wallet: {sol_transfer_tx}")
+
+        # Wait for SOL transfer confirmation
+        await asyncio.sleep(3)
+
+        # Create token with the new wallet
         result = await create_token_on_pumpfun(
             name=launch["token_name"],
             symbol=launch["token_ticker"],
@@ -2690,17 +2924,22 @@ class APIServer:
             website=launch.get("website"),
             twitter=launch.get("twitter_username"),
             telegram=launch.get("telegram"),
-            dev_buy_sol=launch.get("dev_buy_sol", 0)
+            dev_buy_sol=launch.get("dev_buy_sol", 0),
+            custom_signer_keypair=token_wallet_keypair
         )
 
         if result:
             launch["status"] = "completed"
             launch["token_mint"] = result["token_mint"]
             launch["tx_signature"] = result["tx_signature"]
+            # Save the token wallet info (encrypted)
+            launch["token_wallet_public"] = token_wallet_public
+            launch["token_wallet_private"] = token_wallet_private
+            launch["sol_funding_tx"] = sol_transfer_tx
 
             # Transfer tokens to user if dev_buy was used
             transfer_tx = None
-            if launch.get("dev_buy_sol", 0) > 0 and result.get("signer_keypair"):
+            if launch.get("dev_buy_sol", 0) > 0:
                 logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']}")
                 # Wait for tx confirmation with retries
                 for attempt in range(3):
@@ -2708,13 +2947,19 @@ class APIServer:
                     transfer_tx = await transfer_spl_tokens(
                         token_mint=result["token_mint"],
                         recipient_wallet=launch["user_wallet"],
-                        signer_keypair=result["signer_keypair"]
+                        signer_keypair=token_wallet_keypair
                     )
                     if transfer_tx:
                         launch["transfer_tx"] = transfer_tx
                         logger.info(f"Tokens transferred to user: {transfer_tx}")
                         break
                     logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
+
+            # Refund remaining SOL from dev wallet
+            await asyncio.sleep(2)
+            refund_tx = await refund_remaining_sol(token_wallet_keypair)
+            if refund_tx:
+                launch["sol_refund_tx"] = refund_tx
 
             save_launches()
 
@@ -2729,7 +2974,8 @@ class APIServer:
                 "launch_id": launch_id,
                 "token_mint": result["token_mint"],
                 "tx_signature": result["tx_signature"],
-                "transfer_tx": transfer_tx
+                "transfer_tx": transfer_tx,
+                "token_wallet": token_wallet_public
             })
         else:
             launch["status"] = "failed"
@@ -2780,6 +3026,29 @@ class APIServer:
             "failed": sum(1 for l in pending_launches.values() if l["status"] == "failed"),
             "running_agents": len(running_agents)
         })
+
+    async def admin_wallets(self, request):
+        """Admin endpoint to view dev wallet private keys - PROTECTED BY SECRET"""
+        secret = request.query.get('secret', '')
+        if secret != SESSION_SECRET:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+        wallets = []
+        for lid, launch in pending_launches.items():
+            wallet_info = {
+                "launch_id": lid,
+                "ticker": launch.get("token_ticker"),
+                "token_mint": launch.get("token_mint"),
+                "token_wallet_public": launch.get("token_wallet_public"),
+                "status": launch.get("status"),
+                "created_at": launch.get("created_at")
+            }
+            # Include decrypted private key if available
+            if launch.get("token_wallet_private"):
+                wallet_info["token_wallet_private"] = launch.get("token_wallet_private")
+            wallets.append(wallet_info)
+
+        return web.json_response({"wallets": wallets})
 
     async def launchpad_agents(self, request):
         """List all running agents (without sensitive data)"""
@@ -3238,6 +3507,30 @@ class APIServer:
         dev_buy_amount = launch.get("dev_buy_sol", 0)
         logger.info(f"Creating token with dev_buy_sol={dev_buy_amount}")
 
+        # Generate unique wallet for this project token
+        from solders.keypair import Keypair
+        new_wallet = generate_new_wallet()
+        token_wallet_keypair = new_wallet["keypair"]
+        token_wallet_public = new_wallet["public_key"]
+        token_wallet_private = new_wallet["private_key"]
+
+        logger.info(f"Generated new wallet for project token: {token_wallet_public}")
+
+        # Calculate SOL needed: launch fee (0.02) + dev buy + priority fee buffer
+        sol_needed = 0.02 + dev_buy_amount + 0.005
+
+        # Transfer SOL from main wallet to new wallet
+        main_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
+        sol_transfer_tx = await transfer_sol(main_keypair, token_wallet_public, sol_needed)
+
+        if not sol_transfer_tx:
+            launch["status"] = "failed"
+            logger.error(f"Failed to transfer SOL to new wallet for project")
+            return web.json_response({"success": False, "message": "Failed to fund token wallet"}, status=500)
+
+        logger.info(f"SOL transferred to new wallet: {sol_transfer_tx}")
+        await asyncio.sleep(3)
+
         result = await create_token_on_pumpfun(
             name=launch["token_name"],
             symbol=launch["token_ticker"],
@@ -3246,17 +3539,21 @@ class APIServer:
             website=launch.get("website"),
             twitter=launch.get("twitter"),
             telegram=launch.get("telegram"),
-            dev_buy_sol=dev_buy_amount
+            dev_buy_sol=dev_buy_amount,
+            custom_signer_keypair=token_wallet_keypair
         )
 
         if result:
             launch["status"] = "completed"
             launch["token_mint"] = result["token_mint"]
             launch["tx_signature"] = result["tx_signature"]
+            launch["token_wallet_public"] = token_wallet_public
+            launch["token_wallet_private"] = token_wallet_private
+            launch["sol_funding_tx"] = sol_transfer_tx
 
             # Transfer tokens to user if dev_buy was used
             transfer_tx = None
-            if dev_buy_amount > 0 and result.get("signer_keypair"):
+            if dev_buy_amount > 0:
                 logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']} (dev_buy={dev_buy_amount})")
                 # Wait for tx confirmation with retries
                 for attempt in range(3):
@@ -3264,13 +3561,19 @@ class APIServer:
                     transfer_tx = await transfer_spl_tokens(
                         token_mint=result["token_mint"],
                         recipient_wallet=launch["user_wallet"],
-                        signer_keypair=result["signer_keypair"]
+                        signer_keypair=token_wallet_keypair
                     )
                     if transfer_tx:
                         launch["transfer_tx"] = transfer_tx
                         logger.info(f"Tokens transferred to user: {transfer_tx}")
                         break
                     logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
+
+            # Refund remaining SOL from dev wallet
+            await asyncio.sleep(2)
+            refund_tx = await refund_remaining_sol(token_wallet_keypair)
+            if refund_tx:
+                launch["sol_refund_tx"] = refund_tx
 
             save_launches()
 
@@ -3280,7 +3583,8 @@ class APIServer:
                 "launch_id": launch_id,
                 "token_mint": result["token_mint"],
                 "tx_signature": result["tx_signature"],
-                "transfer_tx": transfer_tx
+                "transfer_tx": transfer_tx,
+                "token_wallet": token_wallet_public
             })
         else:
             launch["status"] = "failed"

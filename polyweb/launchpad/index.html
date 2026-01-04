@@ -636,6 +636,32 @@
     </style>
 </head>
 <body>
+    <!-- Password Protection -->
+    <div id="passwordOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #fb651e; z-index: 9999; display: flex; align-items: center; justify-content: center;">
+        <div style="text-align: center;">
+            <h2 style="margin-bottom: 20px; font-size: 24px;">enter password</h2>
+            <input type="password" id="sitePassword" placeholder="password" style="padding: 12px 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; font-size: 16px; width: 250px; text-align: center;" onkeypress="if(event.key==='Enter')checkPassword()">
+            <br><br>
+            <button onclick="checkPassword()" style="padding: 12px 30px; background: white; color: #fb651e; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">enter</button>
+            <p id="passwordError" style="color: #ffcccc; margin-top: 15px; display: none;">wrong password</p>
+        </div>
+    </div>
+    <script>
+        function checkPassword() {
+            const pwd = document.getElementById('sitePassword').value;
+            if (pwd === 'polyd2025') {
+                document.getElementById('passwordOverlay').style.display = 'none';
+                localStorage.setItem('launchpad_auth', 'true');
+            } else {
+                document.getElementById('passwordError').style.display = 'block';
+            }
+        }
+        // Check if already authenticated
+        if (localStorage.getItem('launchpad_auth') === 'true') {
+            document.getElementById('passwordOverlay').style.display = 'none';
+        }
+    </script>
+
     <header class="header">
         <a href="../" class="logo">polydictions</a>
         <nav class="nav-links">
