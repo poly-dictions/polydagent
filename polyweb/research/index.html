@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>research - polydictions</title>
+    <link rel="icon" type="image/png" href="../images/1.png">
+    <link href="../stylesheet_0.css" rel="stylesheet">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fb651e;
+            color: white;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 60px 20px 40px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+
+        .hero p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            text-transform: lowercase;
+            margin-bottom: 24px;
+        }
+
+        /* Chat Container */
+        .chat-container {
+            background: white;
+            border-radius: 24px;
+            padding: 24px;
+            margin: 0 auto;
+            max-width: 800px;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Messages Area */
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 350px;
+            max-height: 500px;
+        }
+
+        .message {
+            padding: 16px 20px;
+            border-radius: 16px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            background: #fb651e;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant {
+            background: #f5f5f5;
+            color: #1a1a1a;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.assistant .market-card {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        .market-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .market-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1a1a1a;
+            flex: 1;
+        }
+
+        .market-volume {
+            font-size: 12px;
+            color: #666;
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 8px;
+            white-space: nowrap;
+            margin-left: 12px;
+        }
+
+        .market-outcomes {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .outcome-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+
+        .outcome-name {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .outcome-price {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .outcome-price.yes {
+            color: #22c55e;
+        }
+
+        .outcome-price.no {
+            color: #ef4444;
+        }
+
+        .market-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e5e5e5;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .market-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .analysis-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .analysis-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #fb651e;
+            margin-bottom: 8px;
+            text-transform: lowercase;
+        }
+
+        .analysis-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .analysis-content ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .analysis-content li {
+            margin: 4px 0;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .risk-low {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .risk-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .risk-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        /* Input Area */
+        .input-area {
+            display: flex;
+            gap: 12px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e5e5;
+            margin-top: auto;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 16px 20px;
+            border: 2px solid #e5e5e5;
+            border-radius: 16px;
+            font-size: 15px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+            color: #1a1a1a;
+        }
+
+        .chat-input:focus {
+            border-color: #fb651e;
+        }
+
+        .chat-input::placeholder {
+            color: #999;
+        }
+
+        .send-btn {
+            padding: 16px 24px;
+            background: #fb651e;
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-btn:hover {
+            background: #e55a1a;
+            transform: translateY(-1px);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Placeholder message */
+        .placeholder-msg {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+            font-size: 14px;
+        }
+
+        .placeholder-msg .hint {
+            color: #bbb;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 20px;
+            background: #f5f5f5;
+            border-radius: 16px;
+            align-self: flex-start;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .loading-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            background: #fb651e;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* Quick actions */
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .quick-action {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 1px solid #e5e5e5;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-action:hover {
+            background: #fb651e;
+            color: white;
+            border-color: #fb651e;
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .header {
+                padding: 16px 20px;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .chat-container {
+                margin: 0 16px;
+                padding: 16px;
+            }
+
+            .messages {
+                min-height: 300px;
+            }
+
+            .input-area {
+                flex-direction: column;
+            }
+
+            .send-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <a href="../" class="logo">polydictions</a>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <h1>research</h1>
+        <p>ai-powered prediction market analysis</p>
+    </section>
+
+    <!-- Chat Container -->
+    <div class="container">
+        <div class="chat-container">
+            <div class="messages" id="messages">
+                <div class="placeholder-msg">
+                    <div>ask any question about prediction markets</div>
+                    <div class="hint">https://polymarket.com/event/... or ask question directly</div>
+                </div>
+            </div>
+
+            <div class="quick-actions" id="quickActions">
+                <button class="quick-action" onclick="askQuestion('what are the top trending markets right now?')">trending markets</button>
+                <button class="quick-action" onclick="askQuestion('analyze trump vs biden election odds')">election analysis</button>
+                <button class="quick-action" onclick="askQuestion('which crypto markets have the best opportunities?')">crypto opportunities</button>
+                <button class="quick-action" onclick="askQuestion('what markets are mispriced right now?')">find mispriced</button>
+            </div>
+
+            <div class="input-area">
+                <input type="text" class="chat-input" id="chatInput" placeholder="paste polymarket url or ask a question..." autocomplete="off">
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    <span>send</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8765'
+            : 'https://polydictions-production.up.railway.app';
+
+        const messagesContainer = document.getElementById('messages');
+        const chatInput = document.getElementById('chatInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const quickActions = document.getElementById('quickActions');
+
+        let isProcessing = false;
+
+        // Enter key handler
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !isProcessing) {
+                sendMessage();
+            }
+        });
+
+        function askQuestion(question) {
+            chatInput.value = question;
+            sendMessage();
+        }
+
+        async function sendMessage() {
+            const input = chatInput.value.trim();
+            if (!input || isProcessing) return;
+
+            // Hide placeholder and quick actions
+            const placeholder = document.querySelector('.placeholder-msg');
+            if (placeholder) placeholder.remove();
+            quickActions.style.display = 'none';
+
+            // Add user message
+            addMessage(input, 'user');
+            chatInput.value = '';
+
+            // Show loading
+            isProcessing = true;
+            sendBtn.disabled = true;
+            const loadingEl = showLoading();
+
+            try {
+                // Check if it's a polymarket URL
+                const polymarketMatch = input.match(/polymarket\.com\/event\/([^\/\s?]+)/);
+
+                if (polymarketMatch) {
+                    // Fetch event data
+                    const eventSlug = polymarketMatch[1];
+                    await analyzeEvent(eventSlug, loadingEl);
+                } else {
+                    // General question - use AI
+                    await answerQuestion(input, loadingEl);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                loadingEl.remove();
+                addMessage('sorry, something went wrong. please try again.', 'assistant');
+            }
+
+            isProcessing = false;
+            sendBtn.disabled = false;
+        }
+
+        async function analyzeEvent(eventSlug, loadingEl) {
+            try {
+                // Fetch event from Polymarket API
+                const eventResp = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`);
+                const events = await eventResp.json();
+
+                if (!events || events.length === 0) {
+                    loadingEl.remove();
+                    addMessage('could not find that event. please check the url and try again.', 'assistant');
+                    return;
+                }
+
+                const event = events[0];
+
+                // Get AI analysis
+                const analysisResp = await fetch(`${API_URL}/api/research/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event })
+                });
+
+                let analysis = null;
+                if (analysisResp.ok) {
+                    const data = await analysisResp.json();
+                    analysis = data.analysis;
+                }
+
+                loadingEl.remove();
+                addEventAnalysis(event, analysis);
+
+            } catch (error) {
+                console.error('Event analysis error:', error);
+                loadingEl.remove();
+                addMessage('failed to analyze event. please try again.', 'assistant');
+            }
+        }
+
+        async function answerQuestion(question, loadingEl) {
+            try {
+                const resp = await fetch(`${API_URL}/api/research/ask`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+
+                loadingEl.remove();
+
+                if (resp.ok) {
+                    const data = await resp.json();
+
+                    if (data.markets && data.markets.length > 0) {
+                        // Show markets with analysis
+                        addMarketsResponse(data.markets, data.analysis);
+                    } else if (data.answer) {
+                        addMessage(data.answer, 'assistant');
+                    } else {
+                        addMessage('i couldn\'t find relevant information for that question. try asking about specific markets or events.', 'assistant');
+                    }
+                } else {
+                    addMessage('sorry, i couldn\'t process that question. try pasting a polymarket url instead.', 'assistant');
+                }
+            } catch (error) {
+                console.error('Question error:', error);
+                loadingEl.remove();
+                addMessage('connection error. please try again.', 'assistant');
+            }
+        }
+
+        function addMessage(content, type) {
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${type}`;
+            msgEl.textContent = content;
+            messagesContainer.appendChild(msgEl);
+            scrollToBottom();
+        }
+
+        function addEventAnalysis(event, analysis) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message assistant';
+
+            const markets = event.markets || [];
+            const totalVolume = markets.reduce((sum, m) => sum + parseFloat(m.volume || 0), 0);
+            const totalLiquidity = markets.reduce((sum, m) => sum + parseFloat(m.liquidity || 0), 0);
+
+            let html = `<strong>${event.title}</strong>`;
+
+            // Show markets
+            markets.slice(0, 3).forEach(market => {
+                const outcomes = market.outcomes ? JSON.parse(market.outcomes) : ['Yes', 'No'];
+                const prices = market.outcomePrices ? JSON.parse(market.outcomePrices) : [0.5, 0.5];
+
+                html += `
+                    <div class="market-card">
+                        <div class="market-card-header">
+                            <div class="market-title">${market.question || market.groupItemTitle || 'Market'}</div>
+                            <div class="market-volume">$${formatNumber(market.volume)} vol</div>
+                        </div>
+                        <div class="market-outcomes">
+                            ${outcomes.map((outcome, i) => `
+                                <div class="outcome-row">
+                                    <span class="outcome-name">${outcome}</span>
+                                    <span class="outcome-price ${i === 0 ? 'yes' : 'no'}">${(parseFloat(prices[i]) * 100).toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="market-stats">
+                            <div class="market-stat">liquidity: $${formatNumber(market.liquidity)}</div>
+                            <div class="market-stat">24h: ${market.volume24hr ? '$' + formatNumber(market.volume24hr) : 'n/a'}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Show analysis
+            if (analysis) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="analysis-title">analysis</div>
+                        <div class="analysis-content">${formatAnalysis(analysis)}</div>
+                    </div>
+                `;
+            }
+
+            // Summary stats
+            html += `
+                <div class="market-stats" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e5e5;">
+                    <div class="market-stat">total volume: $${formatNumber(totalVolume)}</div>
+                    <div class="market-stat">total liquidity: $${formatNumber(totalLiquidity)}</div>
+                    <div class="market-stat">${markets.length} market${markets.length !== 1 ? 's' : ''}</div>
+                </div>
+            `;
+
+            msgEl.innerHTML = html;
+            messagesContainer.appendChild(msgEl);
+            scrollToBottom();
+        }
+
+        function addMarketsResponse(markets, analysis) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message assistant';
+
+            let html = '';
+
+            // Show markets
+            markets.slice(0, 5).forEach(market => {
+                const outcomes = market.outcomes || ['Yes', 'No'];
+                const prices = market.prices || [0.5, 0.5];
+
+                html += `
+                    <div class="market-card">
+                        <div class="market-card-header">
+                            <div class="market-title">${market.question || market.title}</div>
+                            <div class="market-volume">$${formatNumber(market.volume)} vol</div>
+                        </div>
+                        <div class="market-outcomes">
+                            ${outcomes.slice(0, 4).map((outcome, i) => `
+                                <div class="outcome-row">
+                                    <span class="outcome-name">${outcome}</span>
+                                    <span class="outcome-price ${i === 0 ? 'yes' : ''}">${(parseFloat(prices[i] || 0) * 100).toFixed(1)}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Show analysis
+            if (analysis) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="analysis-title">analysis</div>
+                        <div class="analysis-content">${formatAnalysis(analysis)}</div>
+                    </div>
+                `;
+            }
+
+            msgEl.innerHTML = html;
+            messagesContainer.appendChild(msgEl);
+            scrollToBottom();
+        }
+
+        function formatAnalysis(text) {
+            // Convert markdown-like formatting
+            return text
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/- (.*?)(?=<br>|$)/g, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>')
+                .replace(/<\/ul><ul>/g, '');
+        }
+
+        function showLoading() {
+            const loadingEl = document.createElement('div');
+            loadingEl.className = 'loading';
+            loadingEl.innerHTML = `
+                <div class="loading-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <span>analyzing...</span>
+            `;
+            messagesContainer.appendChild(loadingEl);
+            scrollToBottom();
+            return loadingEl;
+        }
+
+        function scrollToBottom() {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            num = parseFloat(num);
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toFixed(0);
+        }
+    </script>
+</body>
+</html>

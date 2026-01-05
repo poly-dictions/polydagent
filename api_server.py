@@ -888,6 +888,33 @@ Output ONLY the response, no quotes or prefixes."""
             logger.error(f"Claude error: {e}")
         return None
 
+    @staticmethod
+    async def generate_analysis(prompt: str) -> Optional[str]:
+        """Generate free-form analysis text using Claude"""
+        if not ANTHROPIC_API_KEY:
+            return None
+
+        headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+        data = {
+            "model": "claude-3-haiku-20240307",
+            "max_tokens": 800,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(ANTHROPIC_API_URL, headers=headers, json=data, timeout=60) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        text = result.get("content", [{}])[0].get("text", "")
+                        return text.strip()
+                    else:
+                        error = await resp.text()
+                        logger.error(f"Anthropic API error in generate_analysis: {resp.status} - {error[:200]}")
+        except Exception as e:
+            logger.error(f"generate_analysis error: {e}")
+        return None
+
 # =============================================================================
 # AGENT RUNNER HELPERS
 # =============================================================================
@@ -1917,6 +1944,10 @@ class APIServer:
         self.app.router.add_get("/api/x/callback", self.x_oauth_callback)
         self.app.router.add_post("/api/x/tweet", self.x_post_tweet)
 
+        # Research API
+        self.app.router.add_post("/api/research/analyze", self.research_analyze_event)
+        self.app.router.add_post("/api/research/ask", self.research_ask_question)
+
         # Project launchpad (token only, no agent)
         self.app.router.add_post("/api/projects/launch", self.projects_launch)
         self.app.router.add_post("/api/projects/confirm/{launch_id}", self.projects_confirm)
@@ -1941,6 +1972,8 @@ class APIServer:
             self.app.router.add_get('/launchpad/', lambda r: web.FileResponse(static_dir / 'launchpad' / 'index.html'))
             self.app.router.add_get('/launchpad/projects', lambda r: web.FileResponse(static_dir / 'launchpad' / 'projects' / 'index.html'))
             self.app.router.add_get('/launchpad/projects/', lambda r: web.FileResponse(static_dir / 'launchpad' / 'projects' / 'index.html'))
+            self.app.router.add_get('/research', lambda r: web.FileResponse(static_dir / 'research' / 'index.html'))
+            self.app.router.add_get('/research/', lambda r: web.FileResponse(static_dir / 'research' / 'index.html'))
 
             # Static assets
             self.app.router.add_static('/css', static_dir / 'css')
@@ -3974,6 +4007,162 @@ class APIServer:
         except Exception as e:
             logger.error(f"x_post_tweet error: {e}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
+
+    # ==================== Research API ====================
+
+    async def research_analyze_event(self, request):
+        """Analyze a Polymarket event and provide insights"""
+        try:
+            data = await request.json()
+            event = data.get("event")
+
+            if not event:
+                return web.json_response({"error": "Missing event data"}, status=400)
+
+            # Build analysis prompt
+            markets = event.get("markets", [])
+            total_volume = sum(float(m.get("volume", 0)) for m in markets)
+            total_liquidity = sum(float(m.get("liquidity", 0)) for m in markets)
+
+            market_details = []
+            for m in markets[:5]:
+                outcomes = m.get("outcomes", "[]")
+                prices = m.get("outcomePrices", "[]")
+                if isinstance(outcomes, str):
+                    outcomes = json.loads(outcomes)
+                if isinstance(prices, str):
+                    prices = json.loads(prices)
+
+                market_details.append({
+                    "question": m.get("question", m.get("groupItemTitle", "")),
+                    "outcomes": outcomes,
+                    "prices": [float(p) * 100 for p in prices] if prices else [],
+                    "volume": float(m.get("volume", 0)),
+                    "liquidity": float(m.get("liquidity", 0))
+                })
+
+            prompt = f"""Analyze this prediction market event and provide insights:
+
+Event: {event.get('title', 'Unknown')}
+Description: {event.get('description', 'No description')[:500]}
+
+Markets:
+{json.dumps(market_details, indent=2)}
+
+Total Volume: ${total_volume:,.0f}
+Total Liquidity: ${total_liquidity:,.0f}
+
+Provide a brief analysis (2-3 paragraphs) covering:
+1. Current market sentiment based on prices
+2. Key factors that could move these markets
+3. Any potential opportunities or risks for traders
+
+Be concise and actionable. Use lowercase. Don't use markdown headers."""
+
+            analysis = await AIAnalyzer.generate_analysis(prompt)
+
+            return web.json_response({
+                "success": True,
+                "analysis": analysis or "Unable to generate analysis at this time."
+            })
+
+        except Exception as e:
+            logger.error(f"research_analyze_event error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def research_ask_question(self, request):
+        """Answer a question about prediction markets"""
+        try:
+            data = await request.json()
+            question = data.get("question", "").strip()
+
+            if not question:
+                return web.json_response({"error": "Missing question"}, status=400)
+
+            # Search for relevant markets
+            markets = []
+            analysis = None
+
+            # Check for keywords to search Polymarket
+            search_terms = question.lower()
+
+            # Fetch trending/relevant markets from Polymarket
+            try:
+                async with aiohttp.ClientSession() as session:
+                    # Search for markets
+                    params = {"limit": 10, "active": "true", "closed": "false"}
+
+                    # Add search term if specific topic mentioned
+                    if any(word in search_terms for word in ["trump", "biden", "election", "president"]):
+                        params["tag"] = "politics"
+                    elif any(word in search_terms for word in ["bitcoin", "btc", "eth", "crypto", "ethereum"]):
+                        params["tag"] = "crypto"
+                    elif any(word in search_terms for word in ["nfl", "nba", "sports", "super bowl"]):
+                        params["tag"] = "sports"
+
+                    # Get markets sorted by volume
+                    async with session.get(
+                        "https://gamma-api.polymarket.com/markets",
+                        params=params,
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as resp:
+                        if resp.status == 200:
+                            all_markets = await resp.json()
+
+                            # Sort by volume and filter
+                            sorted_markets = sorted(
+                                all_markets,
+                                key=lambda x: float(x.get("volume", 0)),
+                                reverse=True
+                            )[:10]
+
+                            for m in sorted_markets:
+                                outcomes = m.get("outcomes", "[]")
+                                prices = m.get("outcomePrices", "[]")
+                                if isinstance(outcomes, str):
+                                    outcomes = json.loads(outcomes)
+                                if isinstance(prices, str):
+                                    prices = json.loads(prices)
+
+                                markets.append({
+                                    "question": m.get("question", ""),
+                                    "outcomes": outcomes,
+                                    "prices": prices,
+                                    "volume": float(m.get("volume", 0)),
+                                    "liquidity": float(m.get("liquidity", 0))
+                                })
+
+            except Exception as e:
+                logger.error(f"Failed to fetch markets: {e}")
+
+            # Generate AI response
+            market_context = ""
+            if markets:
+                market_context = f"\n\nRelevant markets data:\n{json.dumps(markets[:5], indent=2)}"
+
+            prompt = f"""User question about prediction markets: {question}
+{market_context}
+
+Provide a helpful, informative answer about prediction markets. Include:
+- Direct answer to the question
+- Relevant market data if available
+- Key insights or trends
+- Any risks or considerations
+
+Be concise (2-3 paragraphs max). Use lowercase. Be specific with numbers when available."""
+
+            analysis = await AIAnalyzer.generate_analysis(prompt)
+
+            return web.json_response({
+                "success": True,
+                "markets": markets[:5] if markets else [],
+                "analysis": analysis,
+                "answer": analysis if not markets else None
+            })
+
+        except Exception as e:
+            logger.error(f"research_ask_question error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
 
     # ==================== X OAuth Token Management ====================
 
