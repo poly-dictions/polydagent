@@ -4161,32 +4161,69 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
             # Check for keywords to search Polymarket
             search_terms = question.lower()
 
-            # Fetch trending/relevant markets from Polymarket
+            # Fetch markets from Polymarket - use events endpoint for better filtering
             try:
                 async with aiohttp.ClientSession() as session:
-                    # Search for markets
-                    params = {"limit": 10, "active": "true", "closed": "false"}
+                    # Build search query based on keywords
+                    search_query = ""
+                    if any(word in search_terms for word in ["trump", "biden", "election", "president", "politics"]):
+                        search_query = "election"
+                    elif any(word in search_terms for word in ["bitcoin", "btc", "eth", "crypto", "ethereum", "solana"]):
+                        search_query = "crypto"
+                    elif any(word in search_terms for word in ["nfl", "nba", "sports", "super bowl", "football"]):
+                        search_query = "sports"
+                    elif any(word in search_terms for word in ["ai", "openai", "gpt", "tech"]):
+                        search_query = "AI"
 
-                    # Add search term if specific topic mentioned
-                    if any(word in search_terms for word in ["trump", "biden", "election", "president"]):
-                        params["tag"] = "politics"
-                    elif any(word in search_terms for word in ["bitcoin", "btc", "eth", "crypto", "ethereum"]):
-                        params["tag"] = "crypto"
-                    elif any(word in search_terms for word in ["nfl", "nba", "sports", "super bowl"]):
-                        params["tag"] = "sports"
+                    # Get active events
+                    params = {
+                        "limit": 20,
+                        "active": "true",
+                        "closed": "false",
+                        "order": "volume",
+                        "ascending": "false"
+                    }
 
-                    # Get markets sorted by volume
                     async with session.get(
-                        "https://gamma-api.polymarket.com/markets",
+                        "https://gamma-api.polymarket.com/events",
                         params=params,
-                        timeout=aiohttp.ClientTimeout(total=10)
+                        timeout=aiohttp.ClientTimeout(total=15)
                     ) as resp:
                         if resp.status == 200:
-                            all_markets = await resp.json()
+                            all_events = await resp.json()
 
-                            # Sort by volume and filter
+                            # Filter: only events with active markets, not ended
+                            from datetime import datetime
+                            now = datetime.now(timezone.utc)
+
+                            filtered_markets = []
+                            for event in all_events:
+                                event_markets = event.get("markets", [])
+                                for m in event_markets:
+                                    # Skip if closed or resolved
+                                    if m.get("closed") or m.get("resolved"):
+                                        continue
+
+                                    # Check end date - skip if already ended
+                                    end_date = m.get("endDate")
+                                    if end_date:
+                                        try:
+                                            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                                            if end_dt < now:
+                                                continue
+                                        except:
+                                            pass
+
+                                    # Filter by search query if specified
+                                    question_text = (m.get("question", "") + " " + event.get("title", "")).lower()
+                                    if search_query and search_query.lower() not in question_text:
+                                        continue
+
+                                    filtered_markets.append(m)
+
+                            # Sort by volume
                             sorted_markets = sorted(
-                                all_markets,
+                                filtered_markets,
                                 key=lambda x: float(x.get("volume", 0)),
                                 reverse=True
                             )[:10]
@@ -4204,7 +4241,8 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
                                     "outcomes": outcomes,
                                     "prices": prices,
                                     "volume": float(m.get("volume", 0)),
-                                    "liquidity": float(m.get("liquidity", 0))
+                                    "liquidity": float(m.get("liquidity", 0)),
+                                    "endDate": m.get("endDate")
                                 })
 
             except Exception as e:
@@ -4213,18 +4251,29 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
             # Generate AI response
             market_context = ""
             if markets:
-                market_context = f"\n\nRelevant markets data:\n{json.dumps(markets[:5], indent=2)}"
+                # Format market data for AI
+                market_summary = []
+                for m in markets[:5]:
+                    outcomes = m.get("outcomes", [])
+                    prices = m.get("prices", [])
+                    if outcomes and prices:
+                        odds_str = ", ".join([f"{o}: {float(p)*100:.0f}%" for o, p in zip(outcomes[:3], prices[:3])])
+                    else:
+                        odds_str = "n/a"
+                    market_summary.append(f"- {m['question']} | {odds_str} | vol: ${m['volume']:,.0f}")
+                market_context = f"\n\nACTIVE MARKETS (not closed, not resolved):\n" + "\n".join(market_summary)
 
-            prompt = f"""User question about prediction markets: {question}
+            prompt = f"""Today is January 2026. User question about Polymarket prediction markets: {question}
 {market_context}
 
-Provide a helpful, informative answer about prediction markets. Include:
-- Direct answer to the question
-- Relevant market data if available
-- Key insights or trends
-- Any risks or considerations
+IMPORTANT: Only discuss the markets shown above. These are ACTIVE, OPEN markets. Do not mention any closed/resolved markets.
 
-Be concise (2-3 paragraphs max). Use lowercase. Be specific with numbers when available."""
+Provide a helpful answer:
+- Directly answer the question using the market data above
+- Mention specific odds and volumes
+- Give brief insight on what the odds suggest
+
+Be concise (2-3 paragraphs). Use lowercase. Focus on the actual markets shown."""
 
             analysis = await AIAnalyzer.generate_analysis(prompt)
 
