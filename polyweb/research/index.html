@@ -521,33 +521,25 @@
 
         async function analyzeEvent(eventSlug, loadingEl) {
             try {
-                // Fetch event from Polymarket API
-                const eventResp = await fetch(`https://gamma-api.polymarket.com/events?slug=${eventSlug}`);
-                const events = await eventResp.json();
+                // Fetch event via our backend (to avoid CORS)
+                const resp = await fetch(`${API_URL}/api/research/event/${eventSlug}`);
 
-                if (!events || events.length === 0) {
+                if (!resp.ok) {
                     loadingEl.remove();
                     addMessage('could not find that event. please check the url and try again.', 'assistant');
                     return;
                 }
 
-                const event = events[0];
+                const data = await resp.json();
 
-                // Get AI analysis
-                const analysisResp = await fetch(`${API_URL}/api/research/analyze`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ event })
-                });
-
-                let analysis = null;
-                if (analysisResp.ok) {
-                    const data = await analysisResp.json();
-                    analysis = data.analysis;
+                if (!data.event) {
+                    loadingEl.remove();
+                    addMessage('could not find that event. please check the url and try again.', 'assistant');
+                    return;
                 }
 
                 loadingEl.remove();
-                addEventAnalysis(event, analysis);
+                addEventAnalysis(data.event, data.analysis);
 
             } catch (error) {
                 console.error('Event analysis error:', error);

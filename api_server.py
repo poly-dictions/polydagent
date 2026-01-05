@@ -1945,6 +1945,7 @@ class APIServer:
         self.app.router.add_post("/api/x/tweet", self.x_post_tweet)
 
         # Research API
+        self.app.router.add_get("/api/research/event/{slug}", self.research_get_event)
         self.app.router.add_post("/api/research/analyze", self.research_analyze_event)
         self.app.router.add_post("/api/research/ask", self.research_ask_question)
 
@@ -4009,6 +4010,80 @@ class APIServer:
             return web.json_response({"success": False, "message": str(e)}, status=500)
 
     # ==================== Research API ====================
+
+    async def research_get_event(self, request):
+        """Fetch and analyze a Polymarket event by slug"""
+        try:
+            slug = request.match_info.get('slug', '')
+            if not slug:
+                return web.json_response({"error": "Missing event slug"}, status=400)
+
+            # Fetch event from Polymarket API (server-side to avoid CORS)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://gamma-api.polymarket.com/events?slug={slug}",
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    if resp.status != 200:
+                        return web.json_response({"error": "Event not found"}, status=404)
+
+                    events = await resp.json()
+                    if not events or len(events) == 0:
+                        return web.json_response({"error": "Event not found"}, status=404)
+
+                    event = events[0]
+
+            # Generate AI analysis
+            markets = event.get("markets", [])
+            total_volume = sum(float(m.get("volume", 0)) for m in markets)
+            total_liquidity = sum(float(m.get("liquidity", 0)) for m in markets)
+
+            market_details = []
+            for m in markets[:5]:
+                outcomes = m.get("outcomes", "[]")
+                prices = m.get("outcomePrices", "[]")
+                if isinstance(outcomes, str):
+                    outcomes = json.loads(outcomes)
+                if isinstance(prices, str):
+                    prices = json.loads(prices)
+
+                market_details.append({
+                    "question": m.get("question", m.get("groupItemTitle", "")),
+                    "outcomes": outcomes,
+                    "prices": [float(p) * 100 for p in prices] if prices else [],
+                    "volume": float(m.get("volume", 0)),
+                    "liquidity": float(m.get("liquidity", 0))
+                })
+
+            prompt = f"""Analyze this prediction market event and provide insights:
+
+Event: {event.get('title', 'Unknown')}
+Description: {event.get('description', 'No description')[:500]}
+
+Markets:
+{json.dumps(market_details, indent=2)}
+
+Total Volume: ${total_volume:,.0f}
+Total Liquidity: ${total_liquidity:,.0f}
+
+Provide a brief analysis (2-3 paragraphs) covering:
+1. Current market sentiment based on prices
+2. Key factors that could move these markets
+3. Any potential opportunities or risks for traders
+
+Be concise and actionable. Use lowercase. Don't use markdown headers."""
+
+            analysis = await AIAnalyzer.generate_analysis(prompt)
+
+            return web.json_response({
+                "success": True,
+                "event": event,
+                "analysis": analysis or "Unable to generate analysis at this time."
+            })
+
+        except Exception as e:
+            logger.error(f"research_get_event error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
 
     async def research_analyze_event(self, request):
         """Analyze a Polymarket event and provide insights"""
