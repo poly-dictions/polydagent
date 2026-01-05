@@ -1255,22 +1255,13 @@ async def process_agent_mentions(agent_id: str, agent: Dict, server: 'Polydictio
     if not username or (not use_oauth and not twitter_cookie):
         return 0
 
-    # Get mentions - use OAuth if available, otherwise legacy API
-    mentions = []
-    if use_oauth and server:
-        valid_token = await server.get_valid_x_token(agent)
-        if valid_token:
-            # For OAuth, use last_mention_id instead of timestamp
-            last_mention_id = agent_runner_state.get("last_mention_id", {}).get(agent_id)
-            mentions = await XOAuthAPI.get_mentions(valid_token, x_user_id, since_id=last_mention_id)
-            logger.info(f"[{agent_id}] OAuth mentions for @{username}: {len(mentions)}")
-    else:
-        # Legacy API with timestamp
-        default_start = int((datetime.now() - timedelta(hours=1)).timestamp())
-        mention_start = agent_runner_state["mention_start_times"].get(agent_id, default_start)
-        logger.info(f"[{agent_id}] Checking mentions for @{username} since {mention_start}")
-        mentions = await TwitterAPI.get_mentions(username, since_time=mention_start)
-        logger.info(f"[{agent_id}] Found {len(mentions)} raw mentions")
+    # Get mentions - always use TwitterAPI.io (more reliable than OAuth mentions endpoint)
+    # OAuth mentions endpoint has tier restrictions on Twitter API v2
+    default_start = int((datetime.now() - timedelta(hours=1)).timestamp())
+    mention_start = agent_runner_state["mention_start_times"].get(agent_id, default_start)
+    logger.info(f"[{agent_id}] Checking mentions for @{username} since {mention_start}")
+    mentions = await TwitterAPI.get_mentions(username, since_time=mention_start)
+    logger.info(f"[{agent_id}] Found {len(mentions)} raw mentions via TwitterAPI.io")
     answered = agent_runner_state["answered_mentions"].get(agent_id, set())
     real_mentions = [
         m for m in mentions
@@ -1317,15 +1308,8 @@ async def process_agent_mentions(agent_id: str, agent: Dict, server: 'Polydictio
                     save_agents()
         await asyncio.sleep(5)
 
-    # Update tracking for next check
-    if use_oauth and mentions:
-        # For OAuth, save the highest mention ID
-        if "last_mention_id" not in agent_runner_state:
-            agent_runner_state["last_mention_id"] = {}
-        max_id = max(m.get("id", "0") for m in mentions)
-        agent_runner_state["last_mention_id"][agent_id] = max_id
-    else:
-        agent_runner_state["mention_start_times"][agent_id] = int(datetime.now().timestamp())
+    # Update tracking for next check - always use timestamp
+    agent_runner_state["mention_start_times"][agent_id] = int(datetime.now().timestamp())
 
     return answered_count
 
@@ -3449,53 +3433,56 @@ class APIServer:
         x_user_id = agent.get("x_user_id")
         username = agent.get("twitter_username")
 
+        # Get mention_start_time from state
+        default_start = int((datetime.now() - timedelta(hours=1)).timestamp())
+        mention_start = agent_runner_state.get("mention_start_times", {}).get(agent_id, default_start)
+
         result = {
             "agent_id": agent_id,
             "username": username,
             "x_user_id": x_user_id,
             "has_oauth": bool(x_access_token),
             "has_refresh": bool(x_refresh_token),
-            "last_mention_id": agent_runner_state.get("last_mention_id", {}).get(agent_id),
+            "mention_start_time": mention_start,
             "answered_mentions_count": len(agent_runner_state.get("answered_mentions", {}).get(agent_id, set())),
         }
 
+        # Always use TwitterAPI.io for mentions (more reliable)
+        if username:
+            mentions = await TwitterAPI.get_mentions(username, since_time=mention_start)
+            result["mentions_raw_count"] = len(mentions)
+            result["mentions"] = [
+                {
+                    "id": m.get("id"),
+                    "text": m.get("text", "")[:100],
+                    "author": m.get("author", {}).get("userName"),
+                    "createdAt": m.get("createdAt")
+                }
+                for m in mentions[:10]
+            ]
+
+            # Check filtering
+            answered = agent_runner_state.get("answered_mentions", {}).get(agent_id, set())
+            real_mentions = [
+                m for m in mentions
+                if f"@{username.lower()}" in m.get("text", "").lower()
+                and m.get("id") not in answered
+                and m.get("author", {}).get("userName", "").lower() != username.lower()
+            ]
+            result["filtered_mentions_count"] = len(real_mentions)
+            result["filtered_mentions"] = [
+                {
+                    "id": m.get("id"),
+                    "text": m.get("text", "")[:100],
+                    "author": m.get("author", {}).get("userName")
+                }
+                for m in real_mentions[:5]
+            ]
+
+        # Also check OAuth token validity
         if x_access_token and x_user_id:
-            # Try to get valid token
             valid_token = await self.get_valid_x_token(agent)
-            result["token_valid"] = bool(valid_token)
-
-            if valid_token:
-                # Try to fetch mentions
-                last_mention_id = agent_runner_state.get("last_mention_id", {}).get(agent_id)
-                mentions = await XOAuthAPI.get_mentions(valid_token, x_user_id, since_id=last_mention_id)
-                result["mentions_raw_count"] = len(mentions)
-                result["mentions"] = [
-                    {
-                        "id": m.get("id"),
-                        "text": m.get("text", "")[:100],
-                        "author": m.get("author", {}).get("userName"),
-                        "created_at": m.get("created_at")
-                    }
-                    for m in mentions[:10]
-                ]
-
-                # Check filtering
-                answered = agent_runner_state.get("answered_mentions", {}).get(agent_id, set())
-                real_mentions = [
-                    m for m in mentions
-                    if f"@{username.lower()}" in m.get("text", "").lower()
-                    and m.get("id") not in answered
-                    and m.get("author", {}).get("userName", "").lower() != username.lower()
-                ]
-                result["filtered_mentions_count"] = len(real_mentions)
-                result["filtered_mentions"] = [
-                    {
-                        "id": m.get("id"),
-                        "text": m.get("text", "")[:100],
-                        "author": m.get("author", {}).get("userName")
-                    }
-                    for m in real_mentions[:5]
-                ]
+            result["oauth_token_valid"] = bool(valid_token)
 
         return web.json_response(result)
 
