@@ -1428,7 +1428,7 @@ class PolydictionsBot:
             # Add delay before sending result
             await asyncio.sleep(4)
 
-            msg = ["🐋 <b>Top Whales (by PnL) | December 2025</b>\n"]
+            msg = ["🐋 <b>Top Whales (by PnL) | January 2026</b>\n"]
             for w in whales[:20]:
                 rank = w['rank']
                 addr = w['address']

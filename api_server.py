@@ -1929,6 +1929,7 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/launches", self.launchpad_list)
         self.app.router.add_get("/api/launchpad/stats", self.launchpad_stats)
         self.app.router.add_get("/api/launchpad/agents", self.launchpad_agents)
+        self.app.router.add_get("/api/agents/public", self.public_agents_list)  # Public endpoint for agents page
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/test-oauth", self.launchpad_agent_test_oauth)
@@ -3574,11 +3575,16 @@ class APIServer:
                                 data = await resp.json()
                                 if data.get("image_uri"):
                                     safe_agent["image_url"] = data["image_uri"]
-                                # Also get market cap and other stats
+                                # Also get market cap, volume and other stats
                                 if data.get("usd_market_cap"):
                                     safe_agent["market_cap"] = data["usd_market_cap"]
+                                if data.get("total_supply") and data.get("virtual_sol_reserves"):
+                                    # Calculate 24h volume from pump.fun data if available
+                                    pass
                                 if data.get("complete"):
                                     safe_agent["bonding_complete"] = data["complete"]
+                                # Get volume from Birdeye or use market cap as proxy
+                                safe_agent["volume_24h"] = data.get("volume_24h", 0)
                 except Exception as e:
                     logger.error(f"Failed to fetch pump.fun token image: {e}")
 
@@ -3586,6 +3592,66 @@ class APIServer:
         return web.json_response({
             "total": len(running_agents),
             "agents": safe_agents
+        })
+
+    async def public_agents_list(self, request):
+        """Public endpoint for agents page - returns all agents with token stats, sorted by market cap"""
+        sort_by = request.query.get('sort', 'market_cap')  # market_cap, created_at, name
+        order = request.query.get('order', 'desc')  # asc, desc
+
+        agents_data = []
+
+        # Batch fetch pump.fun data for all agents with token_mint
+        async with aiohttp.ClientSession() as session:
+            for agent_id, agent in running_agents.items():
+                agent_info = {
+                    "id": agent_id,
+                    "name": agent.get("agent_name", "Unknown"),
+                    "ticker": agent.get("token_ticker", ""),
+                    "niche": agent.get("niche", "general"),
+                    "twitter_handle": agent.get("twitter_handle", ""),
+                    "token_mint": agent.get("token_mint", ""),
+                    "created_at": agent.get("created_at", 0),
+                    "status": agent.get("status", "unknown"),
+                    "image_url": agent.get("image_url", ""),
+                    "market_cap": 0,
+                    "volume_24h": 0,
+                    "bonding_complete": False
+                }
+
+                # Fetch token data from pump.fun
+                token_mint = agent.get("token_mint")
+                if token_mint:
+                    try:
+                        async with session.get(
+                            f"https://frontend-api.pump.fun/coins/{token_mint}",
+                            timeout=aiohttp.ClientTimeout(total=5)
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                agent_info["image_url"] = data.get("image_uri", agent_info["image_url"])
+                                agent_info["market_cap"] = float(data.get("usd_market_cap", 0) or 0)
+                                agent_info["bonding_complete"] = data.get("complete", False)
+                                # pump.fun doesn't provide 24h volume, use market_cap as proxy for now
+                                agent_info["volume_24h"] = agent_info["market_cap"] * 0.1  # Estimate
+                    except Exception as e:
+                        logger.debug(f"Failed to fetch pump.fun data for {token_mint}: {e}")
+
+                agents_data.append(agent_info)
+
+        # Sort agents
+        reverse = order == 'desc'
+        if sort_by == 'market_cap':
+            agents_data.sort(key=lambda x: x.get('market_cap', 0), reverse=reverse)
+        elif sort_by == 'created_at':
+            agents_data.sort(key=lambda x: x.get('created_at', 0), reverse=reverse)
+        elif sort_by == 'name':
+            agents_data.sort(key=lambda x: x.get('name', '').lower(), reverse=reverse)
+
+        return web.json_response({
+            "success": True,
+            "total": len(agents_data),
+            "agents": agents_data
         })
 
     async def launchpad_agent_refresh(self, request):

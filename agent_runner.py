@@ -47,6 +47,10 @@ TWITTERAPI_KEY = os.getenv("TWITTERAPI_KEY", "")
 TWITTERAPI_BASE = "https://api.twitterapi.io"
 TWITTER_PROXY = os.getenv("TWITTER_PROXY", "")
 
+# Irys config (for on-chain prediction storage)
+IRYS_PRIVATE_KEY = os.getenv("IRYS_PRIVATE_KEY", "")
+IRYS_ENABLED = bool(IRYS_PRIVATE_KEY)
+
 # Posting interval (hours)
 POST_INTERVAL_HOURS = int(os.getenv("AGENT_POST_INTERVAL", "4"))
 
@@ -532,6 +536,70 @@ def save_answered_mentions(answered: Dict[str, Set[str]]):
         print(f"Error saving answered mentions: {e}")
 
 
+class IrysStorage:
+    """Store predictions on Irys (on-chain storage)"""
+
+    _client = None
+
+    @classmethod
+    def get_client(cls):
+        """Get or create Irys client"""
+        if not IRYS_ENABLED:
+            return None
+
+        if cls._client is None:
+            try:
+                from irys_sdk import Builder
+                cls._client = Builder("solana").wallet(IRYS_PRIVATE_KEY).build()
+                print("✓ Irys client initialized")
+            except Exception as e:
+                print(f"✗ Failed to initialize Irys client: {e}")
+                return None
+
+        return cls._client
+
+    @classmethod
+    def upload_prediction(cls, agent_name: str, token_ticker: str, market_title: str,
+                          prediction: str, tweet_id: str, tweet_text: str) -> Optional[str]:
+        """Upload prediction to Irys, returns gateway URL"""
+        client = cls.get_client()
+        if not client:
+            return None
+
+        try:
+            data = {
+                "type": "prediction",
+                "agent": agent_name,
+                "token": token_ticker,
+                "market": market_title,
+                "prediction": prediction,
+                "tweet_id": tweet_id,
+                "tweet_text": tweet_text,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "platform": "polydictions"
+            }
+
+            # Upload as JSON
+            json_bytes = json.dumps(data).encode('utf-8')
+            result = client.upload(json_bytes, tags=[
+                ("Content-Type", "application/json"),
+                ("App-Name", "polydictions"),
+                ("Agent", agent_name),
+                ("Type", "prediction")
+            ])
+
+            tx_id = result.get("id")
+            if tx_id:
+                url = f"https://gateway.irys.xyz/{tx_id}"
+                print(f"✓ Prediction stored on Irys: {url}")
+                return url
+
+        except Exception as e:
+            print(f"✗ Failed to upload to Irys: {e}")
+
+        return None
+
+
 class AgentRunner:
     """Run a single agent"""
 
@@ -641,6 +709,20 @@ polymarket.com/event/{market['slug']}"""
         if tweet_id:
             print(f"✓ Posted! ID: {tweet_id}")
             self.posted_events.add(market['event_id'])
+
+            # Store prediction on Irys (on-chain)
+            if IRYS_ENABLED:
+                agent_name = self.agent.get("twitter_username", self.agent_id)
+                token_ticker = self.agent.get("token_ticker", "")
+                IrysStorage.upload_prediction(
+                    agent_name=agent_name,
+                    token_ticker=token_ticker,
+                    market_title=market['title'],
+                    prediction=reasoning,
+                    tweet_id=str(tweet_id),
+                    tweet_text=tweet_text
+                )
+
             return True
         else:
             print("✗ Failed to post")

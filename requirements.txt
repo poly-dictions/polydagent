@@ -9,3 +9,4 @@ fastapi>=0.115.0
 uvicorn>=0.32.0
 solders>=0.21.0
 pydantic>=2.0.0
+irys-sdk>=0.1.9
