@@ -1908,6 +1908,7 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/agents/{agent_id}/reauth", self.launchpad_agent_reauth)
         self.app.router.add_get("/api/admin/wallets", self.admin_wallets)
         self.app.router.add_post("/api/admin/clear", self.admin_clear_agents)
+        self.app.router.add_post("/api/admin/stop", self.admin_stop_agent)
         self.app.router.add_post("/api/admin/transfer", self.admin_transfer_tokens)
         self.app.router.add_get("/api/admin/debug-mentions", self.admin_debug_mentions)
 
@@ -3351,6 +3352,34 @@ class APIServer:
             "message": f"Cleared {agents_count} agents and {launches_count} launches",
             "agents_cleared": agents_count,
             "launches_cleared": launches_count
+        })
+
+    async def admin_stop_agent(self, request):
+        """Admin endpoint to stop a specific agent - PROTECTED BY SECRET"""
+        secret = request.query.get('secret', '')
+        if secret != SESSION_SECRET:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+        agent_id = request.query.get('agent_id', '')
+        if not agent_id:
+            # List agents if no agent_id provided
+            agents_list = [
+                {"agent_id": aid, "username": a.get("twitter_username"), "status": a.get("status")}
+                for aid, a in running_agents.items()
+            ]
+            return web.json_response({"agents": agents_list})
+
+        if agent_id not in running_agents:
+            return web.json_response({"error": "Agent not found"}, status=404)
+
+        agent = running_agents.pop(agent_id)
+        save_agents()
+        logger.info(f"Admin stopped agent {agent_id} (@{agent.get('twitter_username')})")
+
+        return web.json_response({
+            "success": True,
+            "message": f"Agent {agent_id} stopped",
+            "username": agent.get("twitter_username")
         })
 
     async def admin_transfer_tokens(self, request):
