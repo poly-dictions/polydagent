@@ -362,24 +362,30 @@ class XOAuthAPI:
             if since_id:
                 params["since_id"] = since_id
 
+            url = f"https://api.twitter.com/2/users/{user_id}/mentions"
+            logger.info(f"[XOAuth] Fetching mentions for user_id={user_id}, since_id={since_id}")
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    f"https://api.twitter.com/2/users/{user_id}/mentions",
+                    url,
                     headers={"Authorization": f"Bearer {access_token}"},
                     params=params
                 ) as resp:
+                    response_text = await resp.text()
+                    logger.info(f"[XOAuth] Mentions response status={resp.status}, body_preview={response_text[:500]}")
+
                     if resp.status == 200:
-                        data = await resp.json()
+                        data = json.loads(response_text)
                         tweets = data.get("data", [])
                         users = {u["id"]: u for u in data.get("includes", {}).get("users", [])}
                         # Add author username to each tweet
                         for tweet in tweets:
                             author = users.get(tweet.get("author_id"), {})
                             tweet["author"] = {"userName": author.get("username", "")}
+                        logger.info(f"[XOAuth] Found {len(tweets)} mentions")
                         return tweets
                     else:
-                        error = await resp.text()
-                        logger.error(f"X OAuth get_mentions error ({resp.status}): {error}")
+                        logger.error(f"X OAuth get_mentions error ({resp.status}): {response_text}")
                         return []
         except Exception as e:
             logger.error(f"X OAuth get_mentions exception: {e}")
@@ -606,10 +612,11 @@ class PolymarketScanner:
         return []
 
     # Exclusion lists to prevent category overlap
+    # Note: filter_by_niche uses word boundary matching, so "war" won't match "award"
     NICHE_EXCLUDE = {
-        "sports": ["russia", "ukraine", "war", "ceasefire", "trump", "biden", "election", "congress", "senate",
+        "sports": ["russia", "ukraine", "war", "warfare", "ceasefire", "trump", "biden", "election", "congress", "senate",
                    "israel", "gaza", "palestine", "iran", "tariff", "bitcoin", "crypto", "ethereum", "solana",
-                   "president", "democrat", "republican", "governor"],
+                   "president", "democrat", "republican", "governor", "invasion", "military clash"],
         "crypto": ["trump", "biden", "election", "president", "nba", "nfl", "mlb", "soccer", "football game",
                    "championship", "playoffs", "super bowl", "world cup"],
         "politics": ["nba", "nfl", "mlb", "nhl", "soccer match", "championship game", "playoffs", "super bowl",
@@ -620,6 +627,7 @@ class PolymarketScanner:
     }
 
     def filter_by_niche(self, events: List[Dict], niche: str) -> List[Dict]:
+        import re
         if niche == "general":
             return events
         keywords = NICHE_KEYWORDS.get(niche, [])
@@ -628,13 +636,25 @@ class PolymarketScanner:
             return events
         exclude_list = self.NICHE_EXCLUDE.get(niche, [])
         filtered = []
+
+        def matches_word(text: str, word: str) -> bool:
+            """Check if word matches as whole word (with word boundaries)"""
+            # For phrases with spaces, just do substring match
+            if ' ' in word:
+                return word in text
+            # For single words, use word boundary regex
+            pattern = r'\b' + re.escape(word) + r'\b'
+            return bool(re.search(pattern, text))
+
         for event in events:
             title = event.get("title", "").lower()
             description = event.get("description", "").lower()
             combined = f"{title} {description}"
+            # Keywords can match as substrings (e.g., "bitcoin" matches "bitcoins")
             if any(kw in combined for kw in keywords):
-                # Exclude events that match exclusion list for this niche
-                if exclude_list and any(ex in combined for ex in exclude_list):
+                # Exclusions must match as whole words to avoid false positives
+                # e.g., "war" should not match "award", "iran" should not match "iranian"
+                if exclude_list and any(matches_word(combined, ex) for ex in exclude_list):
                     continue
                 filtered.append(event)
         logger.info(f"Filtered {len(events)} events by niche '{niche}': {len(filtered)} matches")
@@ -653,29 +673,49 @@ class PolymarketScanner:
             return False
         if volume < 50000:
             return False
-        if not markets or len(markets) > 3:
+        if not markets:
             return False
+        # For multi-outcome markets (like "Super Bowl Champion"), we just use the first market
+        # No longer restricting to binary-only markets
         market = markets[0]
         outcomes = market.get('outcomes', [])
         if isinstance(outcomes, str):
             outcomes = json.loads(outcomes)
-        if len(outcomes) != 2:
+        # Allow any number of outcomes >= 2
+        if len(outcomes) < 2:
             return False
         outcome_prices = market.get('outcomePrices')
         if isinstance(outcome_prices, str):
             outcome_prices = json.loads(outcome_prices)
-        if outcome_prices:
+        # For binary markets, check if odds are too extreme
+        if outcome_prices and len(outcomes) == 2:
             yes_pct = float(outcome_prices[0]) * 100
-            if yes_pct >= 92 or yes_pct <= 8:
+            if yes_pct >= 95 or yes_pct <= 5:
                 return False
         return True
 
     def parse_market_data(self, event: Dict) -> Dict:
         market = event.get('markets', [{}])[0]
+        outcomes = market.get('outcomes', [])
+        if isinstance(outcomes, str):
+            outcomes = json.loads(outcomes)
         outcome_prices = market.get('outcomePrices')
         if isinstance(outcome_prices, str):
             outcome_prices = json.loads(outcome_prices)
-        yes_pct = float(outcome_prices[0]) * 100 if outcome_prices else 50
+
+        # For multi-outcome markets, find top contenders
+        is_multi = len(outcomes) > 2
+        if is_multi and outcome_prices:
+            # Get top 3 options with their odds
+            options_with_odds = list(zip(outcomes, [float(p)*100 for p in outcome_prices]))
+            options_with_odds.sort(key=lambda x: x[1], reverse=True)
+            top_options = options_with_odds[:3]
+            # Use leader's odds as "yes_odds" for display
+            yes_pct = top_options[0][1] if top_options else 50
+        else:
+            yes_pct = float(outcome_prices[0]) * 100 if outcome_prices else 50
+            top_options = None
+
         return {
             'event_id': event.get('id', ''),
             'title': event.get('title', ''),
@@ -684,7 +724,9 @@ class PolymarketScanner:
             'no_odds': 100 - yes_pct,
             'volume': float(event.get('volume', 0) or 0),
             'liquidity': float(event.get('liquidity', 0) or market.get('liquidity', 0) or 0),
-            'end_date': event.get('endDate') or market.get('endDate')
+            'end_date': event.get('endDate') or market.get('endDate'),
+            'is_multi_outcome': is_multi,
+            'top_options': top_options  # [(name, odds%), ...] for multi-outcome
         }
 
 # =============================================================================
@@ -693,7 +735,7 @@ class PolymarketScanner:
 
 class AIAnalyzer:
     @staticmethod
-    async def analyze_market(title: str, yes_odds: float, no_odds: float, volume: float, custom_prompt: str = "", niche: str = "general") -> Optional[Dict]:
+    async def analyze_market(title: str, yes_odds: float, no_odds: float, volume: float, custom_prompt: str = "", niche: str = "general", is_multi: bool = False, top_options: list = None) -> Optional[Dict]:
         if not ANTHROPIC_API_KEY:
             return {
                 "signal": "uncertain",
@@ -724,19 +766,28 @@ class AIAnalyzer:
         # Use Anthropic Claude for structured analysis
         from datetime import datetime
         current_date = datetime.now().strftime("%B %d, %Y")
+
+        # Build odds description based on market type
+        if is_multi and top_options:
+            odds_desc = "Top contenders:\n" + "\n".join([f"• {opt[0]}: {opt[1]:.0f}%" for opt in top_options[:5]])
+            signal_instruction = '"signal": "name of the contender you think will win"'
+        else:
+            odds_desc = f"Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%"
+            signal_instruction = '"signal": "yes" or "no"'
+
         prompt = f"""You are a prediction market analyst. Analyze this market and return a JSON response.
 
 IMPORTANT: Today's date is {current_date}. Use this date when referencing current events.
 
 Market: {title}
-Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%
+{odds_desc}
 Volume: ${volume:,.0f}
 
 {f'CONTEXT/NEWS: {str(facts)[:1500]}' if facts else ''}
 
 Return ONLY valid JSON in this exact format (no markdown, no explanation):
 {{
-  "signal": "yes" or "no",
+  {signal_instruction},
   "confidence": "high" or "mid" or "low",
   "reasons": ["reason 1 (max 50 chars)", "reason 2", "reason 3"],
   "main_risk": "primary risk or uncertainty (max 80 chars)",
@@ -937,7 +988,27 @@ def create_tweet_thread(agent: Dict, market: Dict, analysis: Dict) -> List[str]:
     tweets = []
 
     # Tweet 1: Hook + Title + key stats
-    tweet1 = f"""market worth watching
+    is_multi = market.get('is_multi_outcome', False)
+    top_options = market.get('top_options', [])
+
+    if is_multi and top_options:
+        # Multi-outcome market (e.g., "Super Bowl Champion")
+        odds_lines = "\n".join([f"• {opt[0]}: {opt[1]:.0f}%" for opt in top_options[:3]])
+        tweet1 = f"""market worth watching
+
+{market['title']}
+
+top contenders:
+{odds_lines}
+
+volume: {volume_str}
+liquidity: {liquidity_str}
+resolves in: {time_str}
+
+polymarket.com/event/{market['slug']}"""
+    else:
+        # Binary Yes/No market
+        tweet1 = f"""market worth watching
 
 {market['title']}
 
@@ -955,7 +1026,15 @@ polymarket.com/event/{market['slug']}"""
     # Tweet 2: Signal + all reasoning points
     reasoning_lines = "\n".join([f"• {r}" for r in reasons[:4]])
     signal_emoji = "🟢" if signal == "yes" else "🔴" if signal == "no" else "⚪"
-    tweet2 = f"""my take: {signal.upper()} {signal_emoji}
+    # For multi-outcome, signal is the contender name; for binary it's yes/no
+    if is_multi:
+        signal_emoji = "🏆"
+        take_line = f"my pick: {signal} {signal_emoji}"
+    else:
+        signal_emoji = "🟢" if signal == "yes" else "🔴" if signal == "no" else "⚪"
+        take_line = f"my take: {signal.upper()} {signal_emoji}"
+
+    tweet2 = f"""{take_line}
 confidence: {confidence}
 
 why i think this:
@@ -1065,11 +1144,18 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
     logger.info(f"[{agent_id}] Selected: {market['title']}")
     analysis = await AIAnalyzer.analyze_market(
         market['title'], market['yes_odds'], market['no_odds'], market['volume'],
-        custom_prompt=custom_prompt, niche=niche
+        custom_prompt=custom_prompt, niche=niche,
+        is_multi=market.get('is_multi_outcome', False),
+        top_options=market.get('top_options')
     )
     if not analysis:
+        # Fallback for multi-outcome vs binary
+        if market.get('is_multi_outcome') and market.get('top_options'):
+            signal = market['top_options'][0][0]  # Pick the leader
+        else:
+            signal = "yes" if market['yes_odds'] > 50 else "no"
         analysis = {
-            "signal": "yes" if market['yes_odds'] > 50 else "no",
+            "signal": signal,
             "confidence": "low",
             "reasons": ["market dynamics favor this outcome"],
             "main_risk": "unexpected developments",
@@ -1838,6 +1924,8 @@ class APIServer:
         self.app.router.add_get("/api/launchpad/agents/{agent_id}/reauth", self.launchpad_agent_reauth)
         self.app.router.add_get("/api/admin/wallets", self.admin_wallets)
         self.app.router.add_post("/api/admin/clear", self.admin_clear_agents)
+        self.app.router.add_post("/api/admin/transfer", self.admin_transfer_tokens)
+        self.app.router.add_get("/api/admin/debug-mentions", self.admin_debug_mentions)
 
         # X OAuth 2.0
         self.app.router.add_get("/api/x/auth", self.x_oauth_start)
@@ -3130,9 +3218,11 @@ class APIServer:
             transfer_tx = None
             if actual_dev_buy > 0:
                 logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']}")
-                # Wait for tx confirmation with retries
-                for attempt in range(3):
-                    await asyncio.sleep(5 + attempt * 5)  # 5s, 10s, 15s
+                # Wait for tx confirmation with retries - increased delays for Token-2022
+                for attempt in range(5):
+                    wait_time = 10 + attempt * 10  # 10s, 20s, 30s, 40s, 50s
+                    logger.info(f"Transfer attempt {attempt + 1}/5, waiting {wait_time}s for token availability...")
+                    await asyncio.sleep(wait_time)
                     transfer_tx = await transfer_spl_tokens(
                         token_mint=result["token_mint"],
                         recipient_wallet=launch["user_wallet"],
@@ -3278,6 +3368,136 @@ class APIServer:
             "agents_cleared": agents_count,
             "launches_cleared": launches_count
         })
+
+    async def admin_transfer_tokens(self, request):
+        """Admin endpoint to manually transfer tokens to user - PROTECTED BY SECRET"""
+        secret = request.query.get('secret', '')
+        if secret != SESSION_SECRET:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+        launch_id = request.query.get('launch_id', '')
+        if not launch_id or launch_id not in pending_launches:
+            return web.json_response({"error": "Launch not found"}, status=404)
+
+        launch = pending_launches[launch_id]
+        token_mint = launch.get("token_mint")
+        user_wallet = launch.get("user_wallet")
+        dev_wallet_private = launch.get("dev_wallet_private")
+
+        if not token_mint or not user_wallet or not dev_wallet_private:
+            return web.json_response({
+                "error": "Missing data",
+                "token_mint": token_mint,
+                "user_wallet": user_wallet,
+                "has_private_key": bool(dev_wallet_private)
+            }, status=400)
+
+        try:
+            from solders.keypair import Keypair
+            import base58
+            dev_wallet_keypair = Keypair.from_bytes(base58.b58decode(dev_wallet_private))
+
+            logger.info(f"Manual transfer: {token_mint} -> {user_wallet}")
+
+            transfer_tx = await transfer_spl_tokens(
+                token_mint=token_mint,
+                recipient_wallet=user_wallet,
+                signer_keypair=dev_wallet_keypair
+            )
+
+            if transfer_tx:
+                launch["transfer_tx"] = transfer_tx
+                save_launches()
+                return web.json_response({
+                    "success": True,
+                    "transfer_tx": transfer_tx,
+                    "message": f"Tokens transferred to {user_wallet}"
+                })
+            else:
+                return web.json_response({
+                    "success": False,
+                    "message": "Transfer failed - check logs"
+                }, status=500)
+        except Exception as e:
+            logger.error(f"Manual transfer error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def admin_debug_mentions(self, request):
+        """Admin endpoint to debug mentions for a specific agent - PROTECTED BY SECRET"""
+        secret = request.query.get('secret', '')
+        if secret != SESSION_SECRET:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+        agent_id = request.query.get('agent_id', '')
+        if not agent_id or agent_id not in running_agents:
+            # List all agents if no agent_id specified
+            agents_list = [
+                {
+                    "agent_id": aid,
+                    "username": a.get("twitter_username"),
+                    "has_oauth": bool(a.get("x_access_token")),
+                    "x_user_id": a.get("x_user_id"),
+                    "status": a.get("status")
+                }
+                for aid, a in running_agents.items()
+            ]
+            return web.json_response({"agents": agents_list})
+
+        agent = running_agents[agent_id]
+        x_access_token = agent.get("x_access_token")
+        x_refresh_token = agent.get("x_refresh_token")
+        x_user_id = agent.get("x_user_id")
+        username = agent.get("twitter_username")
+
+        result = {
+            "agent_id": agent_id,
+            "username": username,
+            "x_user_id": x_user_id,
+            "has_oauth": bool(x_access_token),
+            "has_refresh": bool(x_refresh_token),
+            "last_mention_id": agent_runner_state.get("last_mention_id", {}).get(agent_id),
+            "answered_mentions_count": len(agent_runner_state.get("answered_mentions", {}).get(agent_id, set())),
+        }
+
+        if x_access_token and x_user_id:
+            # Try to get valid token
+            valid_token = await self.get_valid_x_token(agent)
+            result["token_valid"] = bool(valid_token)
+
+            if valid_token:
+                # Try to fetch mentions
+                last_mention_id = agent_runner_state.get("last_mention_id", {}).get(agent_id)
+                mentions = await XOAuthAPI.get_mentions(valid_token, x_user_id, since_id=last_mention_id)
+                result["mentions_raw_count"] = len(mentions)
+                result["mentions"] = [
+                    {
+                        "id": m.get("id"),
+                        "text": m.get("text", "")[:100],
+                        "author": m.get("author", {}).get("userName"),
+                        "created_at": m.get("created_at")
+                    }
+                    for m in mentions[:10]
+                ]
+
+                # Check filtering
+                answered = agent_runner_state.get("answered_mentions", {}).get(agent_id, set())
+                real_mentions = [
+                    m for m in mentions
+                    if f"@{username.lower()}" in m.get("text", "").lower()
+                    and m.get("id") not in answered
+                    and m.get("author", {}).get("userName", "").lower() != username.lower()
+                ]
+                result["filtered_mentions_count"] = len(real_mentions)
+                result["filtered_mentions"] = [
+                    {
+                        "id": m.get("id"),
+                        "text": m.get("text", "")[:100],
+                        "author": m.get("author", {}).get("userName")
+                    }
+                    for m in real_mentions[:5]
+                ]
+
+        return web.json_response(result)
 
     async def launchpad_agents(self, request):
         """List all running agents (without sensitive data)"""
@@ -3947,9 +4167,11 @@ class APIServer:
             transfer_tx = None
             if dev_buy_amount > 0:
                 logger.info(f"Transferring tokens to user wallet: {launch['user_wallet']} (dev_buy={dev_buy_amount})")
-                # Wait for tx confirmation with retries
-                for attempt in range(3):
-                    await asyncio.sleep(5 + attempt * 5)  # 5s, 10s, 15s
+                # Wait for tx confirmation with retries - increased delays for Token-2022
+                for attempt in range(5):
+                    wait_time = 10 + attempt * 10  # 10s, 20s, 30s, 40s, 50s
+                    logger.info(f"Transfer attempt {attempt + 1}/5, waiting {wait_time}s for token availability...")
+                    await asyncio.sleep(wait_time)
                     transfer_tx = await transfer_spl_tokens(
                         token_mint=result["token_mint"],
                         recipient_wallet=launch["user_wallet"],

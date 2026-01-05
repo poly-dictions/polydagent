@@ -768,7 +768,6 @@
                         <option value="crypto">crypto & blockchain</option>
                         <option value="politics">politics & elections</option>
                         <option value="sports">sports (nba, nfl, soccer)</option>
-                        <option value="entertainment">movies & entertainment</option>
                         <option value="tech">technology & ai</option>
                         <option value="finance">finance & economy</option>
                         <option value="general">general (all topics)</option>
@@ -905,6 +904,7 @@
             PAYMENT_ADDRESS: '',
             LAUNCH_FEE: 0.05
         };
+        let configLoaded = false;
 
         // State
         let currentStep = 1;
@@ -943,12 +943,14 @@
                     CONFIG.PAYMENT_ADDRESS = data.payment_address;
                     CONFIG.LAUNCH_FEE = data.launch_fee;
                     console.log('Config loaded:', CONFIG);
+                    configLoaded = true;
                     return true;
                 }
             } catch (err) {
                 console.error('Failed to load config:', err);
             }
             CONFIG.API_URL = getApiUrl();
+            configLoaded = true;
             return false;
         }
 
@@ -975,17 +977,47 @@
             }
         }
 
-        // Connect with X OAuth
-        async function connectWithX() {
+        // Connect with X OAuth - make global
+        window.connectWithX = async function() {
             const btn = document.getElementById('connectXBtn');
             const btnText = document.getElementById('connectXBtnText');
+
+            // Check if config is loaded
+            if (!configLoaded) {
+                btn.disabled = true;
+                btnText.textContent = 'loading...';
+                // Wait for config to load
+                let attempts = 0;
+                while (!configLoaded && attempts < 50) {
+                    await new Promise(r => setTimeout(r, 100));
+                    attempts++;
+                }
+                if (!configLoaded) {
+                    alert('Please wait for the page to fully load and try again');
+                    btn.disabled = false;
+                    btnText.textContent = 'connect with X';
+                    return;
+                }
+            }
 
             btn.disabled = true;
             btnText.textContent = 'connecting...';
 
             try {
                 const resp = await fetch(`${CONFIG.API_URL}/api/x/auth`);
-                const data = await resp.json();
+
+                if (!resp.ok) {
+                    throw new Error('Server error. Please try again.');
+                }
+
+                const text = await resp.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error('Invalid JSON response:', text);
+                    throw new Error('Server returned invalid response. Please try again.');
+                }
 
                 if (!data.success) {
                     throw new Error(data.message || 'Failed to start OAuth');
@@ -1022,7 +1054,8 @@
                 xAccessToken = event.data.access_token;
                 xRefreshToken = event.data.refresh_token;
                 xUserId = event.data.user_id;
-                xExpiresIn = event.data.expires_in || 7200;
+                // Calculate absolute expiry time instead of relative
+                xExpiresIn = Math.floor(Date.now() / 1000) + (event.data.expires_in || 7200);
                 twitterUsername = event.data.username;
 
                 document.getElementById('connectedUsername').textContent = '@' + twitterUsername;
@@ -1044,19 +1077,31 @@
 
         // Initialize wallet
         function initWallet() {
-            if (window.solana && window.solana.isPhantom) {
-                walletProvider = window.solana;
+            const provider = window.phantom?.solana || window.solana;
 
-                if (walletProvider.isConnected && walletProvider.publicKey) {
-                    handleWalletConnected(walletProvider.publicKey.toString());
+            if (provider && provider.isPhantom) {
+                walletProvider = provider;
+
+                // Check if already connected
+                if (provider.isConnected && provider.publicKey) {
+                    handleWalletConnected(provider.publicKey.toString());
                 }
 
-                walletProvider.on('connect', (publicKey) => {
+                // Listen for connect/disconnect events
+                provider.on('connect', (publicKey) => {
                     handleWalletConnected(publicKey.toString());
                 });
 
-                walletProvider.on('disconnect', () => {
+                provider.on('disconnect', () => {
                     handleWalletDisconnected();
+                });
+
+                provider.on('accountChanged', (publicKey) => {
+                    if (publicKey) {
+                        handleWalletConnected(publicKey.toString());
+                    } else {
+                        handleWalletDisconnected();
+                    }
                 });
             }
         }
@@ -1118,16 +1163,35 @@
         document.getElementById('connectWallet').addEventListener('click', async () => {
             if (walletConnected) {
                 if (walletProvider) {
-                    await walletProvider.disconnect();
+                    try {
+                        await walletProvider.disconnect();
+                    } catch (err) {
+                        console.log('Disconnect error:', err);
+                    }
                 }
                 handleWalletDisconnected();
             } else {
-                if (window.solana && window.solana.isPhantom) {
+                // Try to get Phantom provider
+                const provider = window.phantom?.solana || window.solana;
+
+                if (provider && provider.isPhantom) {
+                    walletProvider = provider;
                     try {
-                        const response = await window.solana.connect();
+                        // Check if already connected
+                        if (provider.isConnected && provider.publicKey) {
+                            handleWalletConnected(provider.publicKey.toString());
+                            return;
+                        }
+                        // Request connection - this should show popup
+                        const response = await provider.connect();
                         handleWalletConnected(response.publicKey.toString());
                     } catch (err) {
                         console.error('Connect error:', err);
+                        if (err.code === 4001 || err.message?.includes('rejected') || err.message?.includes('User rejected')) {
+                            // User rejected - do nothing
+                        } else {
+                            alert('Failed to connect wallet. Please refresh the page and try again.');
+                        }
                     }
                 } else {
                     alert('Please install Phantom wallet');
@@ -1175,8 +1239,8 @@
                 })
             );
             transaction.feePayer = fromPubkey;
-            const { blockhash } = await connection.getLatestBlockhash();
-            transaction.recentBlockhash = blockhash;
+            const latestBlockhash = await connection.getLatestBlockhash();
+            transaction.recentBlockhash = latestBlockhash.blockhash;
 
             console.log('Sending', paymentAmount, 'SOL to dev wallet:', paymentAddress);
 
@@ -1191,11 +1255,11 @@
                 throw new Error('Wallet does not support transaction signing');
             }
 
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+            const confirmBlockhash = await connection.getLatestBlockhash();
             await connection.confirmTransaction({
                 signature,
-                blockhash,
-                lastValidBlockHeight
+                blockhash: confirmBlockhash.blockhash,
+                lastValidBlockHeight: confirmBlockhash.lastValidBlockHeight
             });
 
             return signature;
@@ -1324,10 +1388,19 @@
                     body: JSON.stringify({ tx_signature: txSignature })
                 });
 
-                const confirmData = await confirmResp.json();
+                const confirmText = await confirmResp.text();
+                let confirmData;
+                try {
+                    confirmData = JSON.parse(confirmText);
+                } catch (e) {
+                    console.error('Invalid confirm response:', confirmText);
+                    throw new Error('Server error during token creation');
+                }
 
                 if (!confirmResp.ok) {
-                    throw new Error(confirmData.detail || 'Failed to create token');
+                    console.error('Confirm error response:', confirmData);
+                    const errorMsg = confirmData.detail || confirmData.message || confirmData.error || 'Failed to create token';
+                    throw new Error(errorMsg);
                 }
 
                 // Success - show step 3
