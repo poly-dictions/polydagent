@@ -1697,12 +1697,58 @@ async def refund_remaining_sol(from_keypair) -> Optional[str]:
 async def create_token_on_pumpfun(name: str, symbol: str, description: str, image_data: bytes,
                                    website: str = None, twitter: str = None, telegram: str = None,
                                    dev_buy_sol: float = 0, custom_signer_keypair = None, **kwargs) -> Optional[Dict[str, str]]:
+    """Create token directly on pump.fun using Legacy Token Program (not Token-2022)
+    If dev_buy_sol > 0, uses Jito bundle to atomically create + buy (anti-snipe)
+    """
     try:
         from solders.keypair import Keypair
+        from solders.pubkey import Pubkey
+        from solders.hash import Hash
+        from solders.instruction import Instruction, AccountMeta
         from solders.transaction import VersionedTransaction
+        from solders.message import MessageV0
         from solders.commitment_config import CommitmentLevel
         from solders.rpc.requests import SendVersionedTransaction
         from solders.rpc.config import RpcSendTransactionConfig
+        from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
+        from borsh_construct import CStruct, String, U64
+        import os as _os
+        import struct
+        import base64
+        import base58 as b58
+
+        # Constants for pump.fun Legacy Token Program
+        PUMP_PROGRAM = Pubkey.from_string("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P")
+        TOKEN_PROGRAM_LEGACY = Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        ASSOCIATED_TOKEN_PROGRAM = Pubkey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        MPL_TOKEN_METADATA = Pubkey.from_string("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s")
+        SYSTEM_PROGRAM = Pubkey.from_string("11111111111111111111111111111111")
+        RENT = Pubkey.from_string("SysvarRent111111111111111111111111111111111")
+        EVENT_AUTHORITY = Pubkey.from_string("Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1")
+        PUMP_FEE_ACCOUNT = Pubkey.from_string("CebN5WGQ4jvEPvsVU4EoHEpgzq1VV7AbicfhtW4xC9iM")
+
+        # Jito tip accounts (rotate between them)
+        JITO_TIP_ACCOUNTS = [
+            "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5",
+            "HFqU5x63VTqvQss8hp11i4bVmVEfQeyJYdhLvE9eBJQa",
+            "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY",
+            "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+            "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh",
+            "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+            "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL",
+            "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT"
+        ]
+        # Multiple Jito endpoints for failover
+        JITO_BUNDLE_URLS = [
+            "https://mainnet.block-engine.jito.wtf/api/v1/bundles",
+            "https://amsterdam.mainnet.block-engine.jito.wtf/api/v1/bundles",
+            "https://frankfurt.mainnet.block-engine.jito.wtf/api/v1/bundles",
+            "https://ny.mainnet.block-engine.jito.wtf/api/v1/bundles",
+            "https://tokyo.mainnet.block-engine.jito.wtf/api/v1/bundles",
+        ]
+
+        def get_pda(seeds, program_id):
+            return Pubkey.find_program_address(seeds, program_id)[0]
 
         # Use custom signer if provided, otherwise use main launchpad wallet
         if custom_signer_keypair:
@@ -1727,6 +1773,10 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
             mint_keypair = Keypair()
             logger.info(f"Using random keypair: {mint_keypair.pubkey()}")
 
+        mint = mint_keypair.pubkey()
+        logger.info(f"Token Mint: {mint}")
+
+        # 1. Upload metadata to IPFS
         logger.info(f"Uploading metadata to IPFS for {symbol}...")
         metadata_uri = await upload_metadata_to_ipfs(
             name=name, symbol=symbol, description=description, image_data=image_data,
@@ -1737,52 +1787,364 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
             return None
         logger.info(f"Metadata uploaded: {metadata_uri}")
 
-        # ALWAYS use standard Token Program ("pump"), NOT Token-2022 ("pump-amm")
-        # Token-2022 has issues with some wallets and DEXes
-        pool_type = "pump"
+        # 2. Calculate PDAs
+        bonding_curve = get_pda([b"bonding-curve", bytes(mint)], PUMP_PROGRAM)
+        associated_bonding_curve = get_pda(
+            [bytes(bonding_curve), bytes(TOKEN_PROGRAM_LEGACY), bytes(mint)],
+            ASSOCIATED_TOKEN_PROGRAM
+        )
+        # Global state - use hardcoded address for pump.fun v2
+        PUMP_GLOBAL = Pubkey.from_string("4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf")
+        global_state = PUMP_GLOBAL
+        metadata_account = get_pda(
+            [b"metadata", bytes(MPL_TOKEN_METADATA), bytes(mint)],
+            MPL_TOKEN_METADATA
+        )
+        mint_authority = get_pda([b"mint-authority"], PUMP_PROGRAM)
 
-        create_payload = {
-            "publicKey": str(signer_keypair.pubkey()),
-            "action": "create",
-            "tokenMetadata": {"name": name, "symbol": symbol, "uri": metadata_uri},
-            "mint": str(mint_keypair.pubkey()),
-            "denominatedInSol": "true",
-            "amount": dev_buy_sol,
-            "slippage": 10,
-            "priorityFee": 0.0005,
-            "pool": pool_type
-        }
-        logger.info(f"Using pool type: {pool_type}")
-        logger.info(f"Requesting transaction from pumpportal for {symbol}...")
+        # 3. Build CREATE instruction data
+        # Discriminator for GLOBAL:CREATE V1 (Legacy)
+        create_discriminator = bytes([24, 30, 200, 40, 5, 28, 7, 119])
+
+        # Pack string args using borsh
+        CreateArgs = CStruct(
+            "name" / String,
+            "symbol" / String,
+            "uri" / String
+        )
+        args_data = CreateArgs.build({
+            "name": name,
+            "symbol": symbol,
+            "uri": metadata_uri
+        })
+
+        # Generate 32 secret bytes
+        secret_bytes = _os.urandom(32)
+
+        # Combine: Discriminator + Args + Secret
+        create_instruction_data = create_discriminator + args_data + secret_bytes
+
+        # 4. Build CREATE accounts list (Legacy Token Program)
+        create_accounts = [
+            AccountMeta(mint, is_signer=True, is_writable=True),
+            AccountMeta(mint_authority, is_signer=False, is_writable=False),
+            AccountMeta(bonding_curve, is_signer=False, is_writable=True),
+            AccountMeta(associated_bonding_curve, is_signer=False, is_writable=True),
+            AccountMeta(global_state, is_signer=False, is_writable=False),
+            AccountMeta(MPL_TOKEN_METADATA, is_signer=False, is_writable=False),
+            AccountMeta(metadata_account, is_signer=False, is_writable=True),
+            AccountMeta(signer_keypair.pubkey(), is_signer=True, is_writable=True),
+            AccountMeta(SYSTEM_PROGRAM, is_signer=False, is_writable=False),
+            AccountMeta(TOKEN_PROGRAM_LEGACY, is_signer=False, is_writable=False),
+            AccountMeta(ASSOCIATED_TOKEN_PROGRAM, is_signer=False, is_writable=False),
+            AccountMeta(RENT, is_signer=False, is_writable=False),
+            AccountMeta(EVENT_AUTHORITY, is_signer=False, is_writable=False),
+            AccountMeta(PUMP_PROGRAM, is_signer=False, is_writable=False),
+        ]
+
+        create_ix = Instruction(PUMP_PROGRAM, create_instruction_data, create_accounts)
+
+        # 5. Get latest blockhash
+        logger.info("Getting latest blockhash...")
         async with aiohttp.ClientSession() as session:
-            async with session.post(PUMPPORTAL_API, headers={"Content-Type": "application/json"}, json=create_payload) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    logger.error(f"Pumpportal API error ({resp.status}): {error_text}")
-                    return None
-                tx_bytes = await resp.read()
-                logger.info(f"Got transaction bytes from pumpportal ({len(tx_bytes)} bytes)")
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getLatestBlockhash",
+                "params": [{"commitment": "finalized"}]
+            }
+            async with session.post(HELIUS_RPC, json=payload) as resp:
+                result = await resp.json()
+                blockhash = result['result']['value']['blockhash']
+                logger.info(f"Blockhash: {blockhash}")
 
-        tx = VersionedTransaction.from_bytes(tx_bytes)
-        tx = VersionedTransaction(tx.message, [mint_keypair, signer_keypair])
+        # 6. Build transactions
+        logger.info(f"dev_buy_sol value: {dev_buy_sol}")
+        if dev_buy_sol > 0:
+            # ===== JITO BUNDLE: CREATE + BUY =====
+            logger.info(f"🚀 Building Jito bundle with dev buy: {dev_buy_sol} SOL")
+
+            # User's ATA for the new token
+            user_ata = get_pda(
+                [bytes(signer_keypair.pubkey()), bytes(TOKEN_PROGRAM_LEGACY), bytes(mint)],
+                ASSOCIATED_TOKEN_PROGRAM
+            )
+
+            # BUY instruction discriminator
+            buy_discriminator = bytes([102, 6, 61, 18, 1, 218, 235, 234])
+
+            # Buy args: amount (tokens to receive, use max), max_sol_cost
+            # For initial buy, we specify sol amount and set high max tokens
+            sol_lamports = int(dev_buy_sol * 1_000_000_000)
+            max_tokens = 1_000_000_000_000_000  # Very high number (we want all we can get)
+
+            # Pack: amount (u64) + max_sol_cost (u64) + track_volume (OptionBool: Some(true) = [1, 1])
+            track_volume_bytes = bytes([1, 1])  # Some(true) for volume tracking
+            buy_instruction_data = buy_discriminator + struct.pack('<Q', max_tokens) + struct.pack('<Q', sol_lamports) + track_volume_bytes
+
+            # Derive new required PDAs for pump.fun v2
+            # Creator vault PDA (use signer as creator for dev buy)
+            creator_vault = get_pda([b"creator-vault", bytes(signer_keypair.pubkey())], PUMP_PROGRAM)
+            # Global volume accumulator PDA
+            global_volume_accumulator = get_pda([b"global_volume_accumulator"], PUMP_PROGRAM)
+            # User volume accumulator PDA
+            user_volume_accumulator = get_pda([b"user_volume_accumulator", bytes(signer_keypair.pubkey())], PUMP_PROGRAM)
+            # Fee program
+            FEE_PROGRAM = Pubkey.from_string("pfeeUxB6jkeY1Hxd7CsFCAjcbHA9rWtchMGdZ6VojVZ")
+            # Fee config PDA
+            fee_config = get_pda([b"fee_config", bytes(PUMP_PROGRAM)], FEE_PROGRAM)
+
+            # BUY accounts (updated for pump.fun v2 with all required accounts)
+            buy_accounts = [
+                AccountMeta(global_state, is_signer=False, is_writable=False),           # 0: global
+                AccountMeta(PUMP_FEE_ACCOUNT, is_signer=False, is_writable=True),        # 1: fee
+                AccountMeta(mint, is_signer=False, is_writable=False),                   # 2: mint
+                AccountMeta(bonding_curve, is_signer=False, is_writable=True),           # 3: bonding_curve
+                AccountMeta(associated_bonding_curve, is_signer=False, is_writable=True),# 4: associated_bonding_curve
+                AccountMeta(user_ata, is_signer=False, is_writable=True),                # 5: user_token_account
+                AccountMeta(signer_keypair.pubkey(), is_signer=True, is_writable=True),  # 6: user (signer)
+                AccountMeta(SYSTEM_PROGRAM, is_signer=False, is_writable=False),         # 7: system_program
+                AccountMeta(TOKEN_PROGRAM_LEGACY, is_signer=False, is_writable=False),   # 8: token_program
+                AccountMeta(creator_vault, is_signer=False, is_writable=True),           # 9: creator_vault
+                AccountMeta(EVENT_AUTHORITY, is_signer=False, is_writable=False),        # 10: event_authority
+                AccountMeta(PUMP_PROGRAM, is_signer=False, is_writable=False),           # 11: program
+                AccountMeta(global_volume_accumulator, is_signer=False, is_writable=False), # 12: global_volume_accumulator
+                AccountMeta(user_volume_accumulator, is_signer=False, is_writable=True), # 13: user_volume_accumulator
+                AccountMeta(fee_config, is_signer=False, is_writable=False),             # 14: fee_config
+                AccountMeta(FEE_PROGRAM, is_signer=False, is_writable=False),            # 15: fee_program
+            ]
+
+            buy_ix = Instruction(PUMP_PROGRAM, buy_instruction_data, buy_accounts)
+
+            # Create ATA instruction (needed before buy)
+            # ATA CreateIdempotent instruction
+            create_ata_accounts = [
+                AccountMeta(signer_keypair.pubkey(), is_signer=True, is_writable=True),  # payer
+                AccountMeta(user_ata, is_signer=False, is_writable=True),  # ata
+                AccountMeta(signer_keypair.pubkey(), is_signer=False, is_writable=False),  # owner
+                AccountMeta(mint, is_signer=False, is_writable=False),  # mint
+                AccountMeta(SYSTEM_PROGRAM, is_signer=False, is_writable=False),
+                AccountMeta(TOKEN_PROGRAM_LEGACY, is_signer=False, is_writable=False),
+            ]
+            # CreateIdempotent discriminator = 1
+            create_ata_ix = Instruction(ASSOCIATED_TOKEN_PROGRAM, bytes([1]), create_ata_accounts)
+
+            # Jito tip instruction
+            import random
+            tip_account = Pubkey.from_string(random.choice(JITO_TIP_ACCOUNTS))
+            tip_lamports = 1_000_000  # 0.001 SOL tip for better bundle landing
+
+            # Build TX1: CREATE
+            priority_fee_ix1 = set_compute_unit_price(500_000)  # Higher for Jito
+            compute_limit_ix1 = set_compute_unit_limit(300_000)
+
+            msg1 = MessageV0.try_compile(
+                payer=signer_keypair.pubkey(),
+                instructions=[priority_fee_ix1, compute_limit_ix1, create_ix],
+                address_lookup_table_accounts=[],
+                recent_blockhash=Hash.from_string(blockhash)
+            )
+            tx1 = VersionedTransaction(msg1, [signer_keypair, mint_keypair])
+
+            # Build TX2: CREATE_ATA + BUY + TIP
+            priority_fee_ix2 = set_compute_unit_price(1_000_000)  # Higher priority for bundle
+            compute_limit_ix2 = set_compute_unit_limit(400_000)  # More compute for v2 accounts
+
+            # Tip instruction (simple SOL transfer)
+            from solders.system_program import transfer, TransferParams
+            tip_ix = transfer(TransferParams(
+                from_pubkey=signer_keypair.pubkey(),
+                to_pubkey=tip_account,
+                lamports=tip_lamports
+            ))
+
+            msg2 = MessageV0.try_compile(
+                payer=signer_keypair.pubkey(),
+                instructions=[priority_fee_ix2, compute_limit_ix2, create_ata_ix, buy_ix, tip_ix],
+                address_lookup_table_accounts=[],
+                recent_blockhash=Hash.from_string(blockhash)
+            )
+            tx2 = VersionedTransaction(msg2, [signer_keypair])
+
+            # Encode transactions for Jito
+            tx1_bytes = bytes(tx1)
+            tx2_bytes = bytes(tx2)
+            tx1_b58 = b58.b58encode(tx1_bytes).decode('utf-8')
+            tx2_b58 = b58.b58encode(tx2_bytes).decode('utf-8')
+
+            # Simulate TX1 (CREATE) first to catch errors early
+            logger.info("Simulating CREATE transaction before bundle...")
+            async with aiohttp.ClientSession() as sim_session:
+                sim_payload = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "simulateTransaction",
+                    "params": [
+                        tx1_b58,
+                        {"encoding": "base58", "commitment": "processed", "replaceRecentBlockhash": True}
+                    ]
+                }
+                async with sim_session.post(HELIUS_RPC, json=sim_payload) as sim_resp:
+                    sim_result = await sim_resp.json()
+                    logger.info(f"TX1 simulation result: {json.dumps(sim_result)[:1500]}")
+
+                    if "error" in sim_result:
+                        raise Exception(f"TX1 simulation RPC error: {sim_result['error']}")
+
+                    sim_value = sim_result.get("result", {}).get("value", {})
+                    if sim_value.get("err"):
+                        logs = sim_value.get("logs", [])
+                        logger.error(f"TX1 simulation failed: {sim_value['err']}")
+                        logger.error(f"Simulation logs: {logs}")
+                        raise Exception(f"CREATE transaction simulation failed: {sim_value['err']} - Logs: {logs[-5:] if logs else 'none'}")
+
+                    logger.info("✅ TX1 (CREATE) simulation passed")
+
+            # Send bundle to Jito with retry across multiple endpoints
+            logger.info("Sending Jito bundle (CREATE + BUY)...")
+            logger.info(f"Bundle TX1 (CREATE): {len(tx1_bytes)} bytes")
+            logger.info(f"Bundle TX2 (ATA+BUY+TIP): {len(tx2_bytes)} bytes")
+
+            bundle_payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "sendBundle",
+                "params": [[tx1_b58, tx2_b58]]
+            }
+
+            bundle_error = None
+            bundle_id = None
+            successful_endpoint = None
+
+            async with aiohttp.ClientSession() as session:
+                # Try each Jito endpoint until one succeeds
+                import random
+                shuffled_urls = JITO_BUNDLE_URLS.copy()
+                random.shuffle(shuffled_urls)  # Randomize to distribute load
+
+                for endpoint_idx, jito_url in enumerate(shuffled_urls):
+                    logger.info(f"Trying Jito endpoint {endpoint_idx + 1}/{len(shuffled_urls)}: {jito_url}")
+                    try:
+                        async with session.post(jito_url, json=bundle_payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                            resp_text = await resp.text()
+                            logger.info(f"Jito response status: {resp.status}, body: {resp_text[:500]}")
+
+                            try:
+                                result = json.loads(resp_text)
+                            except Exception as e:
+                                logger.error(f"Failed to parse Jito response: {resp_text}")
+                                bundle_error = f"Invalid Jito response: {str(e)}"
+                                continue  # Try next endpoint
+
+                            if "error" in result:
+                                error_msg = result['error']
+                                error_code = error_msg.get('code', 0) if isinstance(error_msg, dict) else 0
+                                logger.warning(f"Jito endpoint error (code {error_code}): {error_msg}")
+
+                                # Rate limit or congestion - try next endpoint
+                                if error_code in [-32097, -32098, -32099]:
+                                    logger.info("Rate limited, trying next endpoint...")
+                                    await asyncio.sleep(1)  # Brief pause before next attempt
+                                    continue
+
+                                bundle_error = f"Jito error: {error_msg}"
+                                continue  # Try next endpoint
+                            else:
+                                bundle_id = result.get("result")
+                                successful_endpoint = jito_url
+                                logger.info(f"✅ Jito bundle sent! Bundle ID: {bundle_id}")
+                                break  # Success - exit endpoint loop
+
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Timeout on endpoint {jito_url}, trying next...")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Error with endpoint {jito_url}: {e}")
+                        continue
+
+                # If no endpoint succeeded
+                if not bundle_id:
+                    logger.error(f"All Jito endpoints failed. Last error: {bundle_error}")
+                    raise Exception(f"All Jito endpoints failed: {bundle_error or 'Unknown error'}")
+
+                # Wait and check bundle status with retries
+                for attempt in range(3):
+                    await asyncio.sleep(5 + attempt * 5)  # 5s, 10s, 15s
+
+                    status_payload = {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "getBundleStatuses",
+                        "params": [[bundle_id]]
+                    }
+                    try:
+                        async with session.post(successful_endpoint, json=status_payload, timeout=aiohttp.ClientTimeout(total=15)) as status_resp:
+                            status_result = await status_resp.json()
+                            logger.info(f"Bundle status check {attempt + 1}: {status_result}")
+
+                            # Check if bundle landed
+                            statuses = status_result.get("result", {}).get("value", [])
+                            if statuses and len(statuses) > 0:
+                                status_info = statuses[0]
+                                conf_status = status_info.get("confirmation_status")
+                                if conf_status in ["confirmed", "finalized"]:
+                                    logger.info(f"✅ Bundle {conf_status}! Slot: {status_info.get('slot')}")
+                                    return {"token_mint": str(mint), "tx_signature": bundle_id, "signer_keypair": signer_keypair, "bundle_id": bundle_id}
+                                elif conf_status == "processed":
+                                    logger.info(f"Bundle processed, waiting for confirmation...")
+                                    continue
+                                else:
+                                    # Check for errors
+                                    err = status_info.get("err")
+                                    if err:
+                                        logger.error(f"Bundle failed with error: {err}")
+                                        raise Exception(f"Bundle execution failed: {err}")
+                                    logger.warning(f"Bundle status: {status_info}")
+                            else:
+                                logger.info(f"Bundle not found yet, retrying...")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Status check timeout, retrying...")
+                        continue
+
+                # If we got here without returning, bundle may have landed but status unknown
+                logger.warning("Bundle status unknown after retries, assuming success")
+                return {"token_mint": str(mint), "tx_signature": bundle_id, "signer_keypair": signer_keypair, "bundle_id": bundle_id}
+
+        # ===== REGULAR TRANSACTION (no dev buy) =====
+        priority_fee_ix = set_compute_unit_price(100_000)
+        compute_limit_ix = set_compute_unit_limit(250_000)
+
+        msg = MessageV0.try_compile(
+            payer=signer_keypair.pubkey(),
+            instructions=[priority_fee_ix, compute_limit_ix, create_ix],
+            address_lookup_table_accounts=[],
+            recent_blockhash=Hash.from_string(blockhash)
+        )
+
+        tx = VersionedTransaction(msg, [signer_keypair, mint_keypair])
+
+        # Send transaction
+        logger.info(f"Sending Legacy Token creation transaction for {symbol}...")
         commitment = CommitmentLevel.Confirmed
         config = RpcSendTransactionConfig(preflight_commitment=commitment)
         tx_payload = SendVersionedTransaction(tx, config)
 
-        logger.info(f"Sending transaction to Helius RPC...")
         async with aiohttp.ClientSession() as session:
             async with session.post(HELIUS_RPC, headers={"Content-Type": "application/json"}, data=tx_payload.to_json()) as resp:
                 result = await resp.json()
                 if "error" in result:
-                    logger.error(f"Helius RPC error: {result['error']}")
+                    logger.error(f"RPC error: {result['error']}")
                     return None
                 tx_signature = result.get("result")
-                logger.info(f"Transaction sent: {tx_signature}")
+                logger.info(f"Token created! Tx: {tx_signature}")
 
-        return {"token_mint": str(mint_keypair.pubkey()), "tx_signature": tx_signature, "signer_keypair": signer_keypair}
+        return {"token_mint": str(mint), "tx_signature": tx_signature, "signer_keypair": signer_keypair}
     except Exception as e:
         logger.error(f"Error creating token: {e}")
-        return None
+        import traceback
+        logger.error(traceback.format_exc())
+        # Re-raise exception so caller can see details
+        raise
 
 
 async def transfer_spl_tokens(token_mint: str, recipient_wallet: str, signer_keypair) -> Optional[str]:
@@ -2118,12 +2480,25 @@ class APIServer:
     async def cors_middleware(self, request, handler):
         # Get origin from request
         origin = request.headers.get('Origin', '')
-        
+
         # Handle preflight OPTIONS requests
         if request.method == 'OPTIONS':
             response = web.Response(status=200)
         else:
-            response = await handler(request)
+            try:
+                response = await handler(request)
+            except web.HTTPException as e:
+                # HTTPException already has a response, add CORS headers to it
+                response = e
+            except Exception as e:
+                # Other exceptions - create 500 response with error details
+                logger.error(f"Unhandled exception in handler: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                response = web.json_response(
+                    {"success": False, "message": f"Internal server error: {str(e)}"},
+                    status=500
+                )
 
         # Check if origin is allowed
         if origin in ALLOWED_ORIGINS or DEV_MODE:
@@ -2132,7 +2507,7 @@ class APIServer:
             # No origin header (same-origin request or server-to-server)
             response.headers['Access-Control-Allow-Origin'] = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else '*'
         # If origin not allowed, don't add CORS headers (browser will block)
-        
+
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Telegram-User-Id, X-Wallet-Address, X-Session-Token'
         response.headers['Access-Control-Max-Age'] = '86400'
@@ -3106,7 +3481,10 @@ class APIServer:
                 if field.name == 'token_image':
                     image_data = await field.read()
                 else:
-                    fields[field.name] = await field.text()
+                    value = await field.text()
+                    fields[field.name] = value
+                    if field.name == 'dev_buy_sol':
+                        logger.info(f"📥 Received dev_buy_sol field: '{value}'")
 
             # Check if using OAuth or legacy credentials
             has_oauth = bool(fields.get('x_access_token') and fields.get('x_refresh_token'))
@@ -3155,7 +3533,10 @@ class APIServer:
             token_name = f"{token_ticker} Agent"
 
             # Parse dev buy amount (max 85 SOL)
-            dev_buy_sol = min(float(fields.get('dev_buy_sol', 0) or 0), 85.0)
+            raw_dev_buy = fields.get('dev_buy_sol', 0)
+            logger.info(f"Raw dev_buy_sol from form: '{raw_dev_buy}' (type: {type(raw_dev_buy)})")
+            dev_buy_sol = min(float(raw_dev_buy or 0), 85.0)
+            logger.info(f"Parsed dev_buy_sol: {dev_buy_sol}")
 
             launch_data = {
                 "token_ticker": token_ticker,
@@ -3401,11 +3782,7 @@ class APIServer:
                         break
                     logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
 
-            # Refund remaining SOL from dev wallet to our wallet
-            await asyncio.sleep(2)
-            refund_tx = await refund_remaining_sol(dev_wallet_keypair)
-            if refund_tx:
-                launch["sol_refund_tx"] = refund_tx
+            # SOL remains in dev wallet - we have the private keys saved
 
             save_launches()
 
@@ -4957,17 +5334,23 @@ Be concise (2-3 paragraphs). Use lowercase. Focus on the actual markets shown.""
         logger.info(f"SOL transferred to new wallet: {sol_transfer_tx}")
         await asyncio.sleep(3)
 
-        result = await create_token_on_pumpfun(
-            name=launch["token_name"],
-            symbol=launch["token_ticker"],
-            description=launch["description"],
-            image_data=launch["image_data"],
-            website=launch.get("website"),
-            twitter=launch.get("twitter"),
-            telegram=launch.get("telegram"),
-            dev_buy_sol=dev_buy_amount,
-            custom_signer_keypair=token_wallet_keypair
-        )
+        try:
+            result = await create_token_on_pumpfun(
+                name=launch["token_name"],
+                symbol=launch["token_ticker"],
+                description=launch["description"],
+                image_data=launch["image_data"],
+                website=launch.get("website"),
+                twitter=launch.get("twitter"),
+                telegram=launch.get("telegram"),
+                dev_buy_sol=dev_buy_amount,
+                custom_signer_keypair=token_wallet_keypair
+            )
+        except Exception as e:
+            launch["status"] = "failed"
+            error_msg = str(e)
+            logger.error(f"Token creation failed with exception: {error_msg}")
+            return web.json_response({"success": False, "message": f"Token creation failed: {error_msg}"}, status=500)
 
         if result:
             launch["status"] = "completed"
@@ -4997,11 +5380,7 @@ Be concise (2-3 paragraphs). Use lowercase. Focus on the actual markets shown.""
                         break
                     logger.warning(f"Transfer attempt {attempt + 1} failed, retrying...")
 
-            # Refund remaining SOL from dev wallet
-            await asyncio.sleep(2)
-            refund_tx = await refund_remaining_sol(token_wallet_keypair)
-            if refund_tx:
-                launch["sol_refund_tx"] = refund_tx
+            # SOL remains in token wallet - we have the private keys saved
 
             save_launches()
 
