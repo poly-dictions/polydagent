@@ -54,8 +54,8 @@ SESSION_DURATION_HOURS = 24
 
 # CORS - Allowed origins
 ALLOWED_ORIGINS = [
-    origin.strip() 
-    for origin in os.getenv('ALLOWED_ORIGINS', 'https://polydictions.xyz').split(',')
+    origin.strip()
+    for origin in os.getenv('ALLOWED_ORIGINS', 'https://polydictions.xyz,https://polydictions.vercel.app').split(',')
     if origin.strip()
 ]
 if DEV_MODE:
@@ -89,7 +89,7 @@ LAUNCHPAD_WALLET_PRIVATE_KEY = os.getenv("LAUNCHPAD_WALLET_PRIVATE_KEY")
 LAUNCHPAD_WALLET_PUBLIC_KEY = "5JSSPq14p2NeVs2WgwYxPVLXczJdsbZTJaUF4Bo7MvvC"
 SOL_REFUND_WALLET = "EFpXYkq36Kt5ovdT7TF8Nzj5Sg9YfyDBQ1xxjLPkYUTy"  # Wallet to receive leftover SOL
 POLYD_MINT = "iATcGSt9DhJF9ZiJ6dmR153N7bW2G4J9dSSDxWSpump"
-REQUIRED_POLYD_BALANCE = 1_000  # 1K $POLYD required for launchpad (temporary)
+REQUIRED_POLYD_BALANCE = 1_000_000  # 1M $POLYD required for launchpad
 LAUNCH_FEE_SOL = 0.05  # Fee for launchpad
 HELIUS_API_KEY = os.getenv("HELIUS_API_KEY", "")
 HELIUS_RPC = f"https://mainnet.helius-rpc.com/?api-key={HELIUS_API_KEY}"
@@ -116,7 +116,7 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Agent intervals
-POST_INTERVAL_HOURS = int(os.getenv("AGENT_POST_INTERVAL", "4"))
+POST_INTERVAL_HOURS = int(os.getenv("AGENT_POST_INTERVAL", "2"))
 MENTION_CHECK_INTERVAL = int(os.getenv("MENTION_CHECK_INTERVAL", "60"))
 
 # Niche keywords for filtering Polymarket events
@@ -184,10 +184,12 @@ LAUNCHES_FILE = DATA_DIR / "launches_history.json"
 AGENTS_FILE = DATA_DIR / "agents.json"
 ANSWERED_MENTIONS_FILE = DATA_DIR / "agent_answered_mentions.json"
 AGENT_POSTED_EVENTS_FILE = DATA_DIR / "agent_posted_events.json"
+VANITY_KEYPAIRS_FILE = DATA_DIR / "vanity_keypairs.json"
 
 # Global stores for launchpad
 pending_launches: Dict[str, Dict[str, Any]] = {}
 running_agents: Dict[str, Dict[str, Any]] = {}
+vanity_keypairs: List[Dict[str, Any]] = []
 agent_runner_state = {
     "last_post_time": 0,
     "answered_mentions": {},
@@ -341,6 +343,39 @@ def save_posted_events(posted: Dict[str, Set[str]]):
             json.dump({k: list(v) for k, v in posted.items()}, f)
     except Exception as e:
         logger.error(f"Error saving posted events: {e}")
+
+def load_vanity_keypairs():
+    """Load pre-grinded vanity keypairs from file"""
+    global vanity_keypairs
+    if VANITY_KEYPAIRS_FILE.exists():
+        try:
+            with open(VANITY_KEYPAIRS_FILE, 'r') as f:
+                vanity_keypairs = json.load(f)
+                unused = sum(1 for k in vanity_keypairs if not k.get('used', False))
+                logger.info(f"Loaded {len(vanity_keypairs)} vanity keypairs ({unused} unused)")
+        except Exception as e:
+            logger.error(f"Error loading vanity keypairs: {e}")
+            vanity_keypairs = []
+
+def save_vanity_keypairs():
+    """Save vanity keypairs to file"""
+    try:
+        with open(VANITY_KEYPAIRS_FILE, 'w') as f:
+            json.dump(vanity_keypairs, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving vanity keypairs: {e}")
+
+def get_vanity_keypair():
+    """Get an unused vanity keypair from the pool, or None if none available"""
+    global vanity_keypairs
+    for keypair in vanity_keypairs:
+        if not keypair.get('used', False):
+            keypair['used'] = True
+            save_vanity_keypairs()
+            logger.info(f"Using vanity keypair: {keypair['pubkey']}")
+            return keypair
+    logger.warning("No unused vanity keypairs available")
+    return None
 
 # =============================================================================
 # X OAUTH API CLASS (Official API)
@@ -775,29 +810,40 @@ class AIAnalyzer:
             odds_desc = f"Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%"
             signal_instruction = '"signal": "yes" or "no"'
 
-        prompt = f"""You are a prediction market analyst. Analyze this market and return a JSON response.
+        prompt = f"""You are a sharp prediction market analyst who makes bold, specific calls based on data.
 
-IMPORTANT: Today's date is {current_date}. Use this date when referencing current events.
+Today: {current_date}
 
 Market: {title}
 {odds_desc}
 Volume: ${volume:,.0f}
 
-{f'CONTEXT/NEWS: {str(facts)[:1500]}' if facts else ''}
+{f'LATEST INTEL:\n{str(facts)[:2000]}' if facts else ''}
 
-Return ONLY valid JSON in this exact format (no markdown, no explanation):
+ANALYSIS GUIDELINES:
+- Make a CLEAR directional call, not wishy-washy
+- Reasons must be SPECIFIC and ACTIONABLE (cite names, numbers, events)
+- Do NOT use generic phrases like "market dynamics", "momentum", "sentiment"
+- Reference CONCRETE facts: polls, statements, historical data, deadlines
+- If odds seem mispriced, explain WHY with evidence
+- Be contrarian if the data supports it
+
+Return ONLY valid JSON:
 {{
   {signal_instruction},
   "confidence": "high" or "mid" or "low",
-  "reasons": ["reason 1 (max 50 chars)", "reason 2", "reason 3"],
-  "main_risk": "primary risk or uncertainty (max 80 chars)",
-  "notes": "optional macro/timing context (max 60 chars, or empty string)"
+  "reasons": ["specific reason with data/names (max 60 chars)", "another concrete reason", "third evidence-based point"],
+  "main_risk": "specific event/factor that could flip this (max 80 chars)",
+  "notes": "timing context or key date to watch (max 60 chars, or empty)"
 }}
 
-{f'Style note: {custom_prompt}' if custom_prompt else ''}"""
+BAD reasons: "market trends suggest", "momentum building", "odds favor outcome"
+GOOD reasons: "Trump leads RCP avg by 3.2pts", "Fed signaled March cut", "deadline is Feb 15"
+
+{f'Personality/style: {custom_prompt}' if custom_prompt else ''}"""
 
         headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
-        data = {"model": "claude-3-haiku-20240307", "max_tokens": 400, "messages": [{"role": "user", "content": prompt}]}
+        data = {"model": "claude-3-haiku-20240307", "max_tokens": 800, "messages": [{"role": "user", "content": prompt}]}
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -813,11 +859,27 @@ Return ONLY valid JSON in this exact format (no markdown, no explanation):
                                 text = text.split("```")[1]
                                 if text.startswith("json"):
                                     text = text[4:]
+                            # Try to extract JSON from text - find matching braces
+                            text = text.strip()
+                            start_idx = text.find('{')
+                            if start_idx != -1:
+                                # Find matching closing brace
+                                depth = 0
+                                end_idx = start_idx
+                                for i, c in enumerate(text[start_idx:], start_idx):
+                                    if c == '{':
+                                        depth += 1
+                                    elif c == '}':
+                                        depth -= 1
+                                        if depth == 0:
+                                            end_idx = i
+                                            break
+                                text = text[start_idx:end_idx+1]
                             analysis = json.loads(text.strip())
                             logger.info(f"AI analysis: signal={analysis.get('signal')}, confidence={analysis.get('confidence')}")
                             return analysis
                         except json.JSONDecodeError as e:
-                            logger.warning(f"JSON parse error: {e}, raw: {text[:200]}")
+                            logger.warning(f"JSON parse error: {e}, raw: {text[:500]}")
                             # Fallback: extract what we can
                             return {
                                 "signal": "yes" if yes_odds > 50 else "no",
@@ -1634,7 +1696,7 @@ async def refund_remaining_sol(from_keypair) -> Optional[str]:
 
 async def create_token_on_pumpfun(name: str, symbol: str, description: str, image_data: bytes,
                                    website: str = None, twitter: str = None, telegram: str = None,
-                                   dev_buy_sol: float = 0, custom_signer_keypair = None) -> Optional[Dict[str, str]]:
+                                   dev_buy_sol: float = 0, custom_signer_keypair = None, **kwargs) -> Optional[Dict[str, str]]:
     try:
         from solders.keypair import Keypair
         from solders.transaction import VersionedTransaction
@@ -1652,14 +1714,32 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
                 return None
             signer_keypair = Keypair.from_base58_string(LAUNCHPAD_WALLET_PRIVATE_KEY)
 
-        mint_keypair = Keypair()
+        # Use vanity keypair if use_vanity=True and available, otherwise random
+        if kwargs.get('use_vanity', False):
+            vanity_data = get_vanity_keypair()
+            if vanity_data:
+                mint_keypair = Keypair.from_base58_string(vanity_data['private_key'])
+                logger.info(f"Using VANITY keypair: {mint_keypair.pubkey()}")
+            else:
+                mint_keypair = Keypair()
+                logger.info(f"No vanity keypairs available, using random keypair: {mint_keypair.pubkey()}")
+        else:
+            mint_keypair = Keypair()
+            logger.info(f"Using random keypair: {mint_keypair.pubkey()}")
 
+        logger.info(f"Uploading metadata to IPFS for {symbol}...")
         metadata_uri = await upload_metadata_to_ipfs(
             name=name, symbol=symbol, description=description, image_data=image_data,
             image_filename=f"{symbol.lower()}.png", website=website, twitter=twitter, telegram=telegram
         )
         if not metadata_uri:
+            logger.error("Failed to upload metadata to IPFS")
             return None
+        logger.info(f"Metadata uploaded: {metadata_uri}")
+
+        # ALWAYS use standard Token Program ("pump"), NOT Token-2022 ("pump-amm")
+        # Token-2022 has issues with some wallets and DEXes
+        pool_type = "pump"
 
         create_payload = {
             "publicKey": str(signer_keypair.pubkey()),
@@ -1670,13 +1750,18 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
             "amount": dev_buy_sol,
             "slippage": 10,
             "priorityFee": 0.0005,
-            "pool": "pump"
+            "pool": pool_type
         }
+        logger.info(f"Using pool type: {pool_type}")
+        logger.info(f"Requesting transaction from pumpportal for {symbol}...")
         async with aiohttp.ClientSession() as session:
             async with session.post(PUMPPORTAL_API, headers={"Content-Type": "application/json"}, json=create_payload) as resp:
                 if resp.status != 200:
+                    error_text = await resp.text()
+                    logger.error(f"Pumpportal API error ({resp.status}): {error_text}")
                     return None
                 tx_bytes = await resp.read()
+                logger.info(f"Got transaction bytes from pumpportal ({len(tx_bytes)} bytes)")
 
         tx = VersionedTransaction.from_bytes(tx_bytes)
         tx = VersionedTransaction(tx.message, [mint_keypair, signer_keypair])
@@ -1684,12 +1769,15 @@ async def create_token_on_pumpfun(name: str, symbol: str, description: str, imag
         config = RpcSendTransactionConfig(preflight_commitment=commitment)
         tx_payload = SendVersionedTransaction(tx, config)
 
+        logger.info(f"Sending transaction to Helius RPC...")
         async with aiohttp.ClientSession() as session:
             async with session.post(HELIUS_RPC, headers={"Content-Type": "application/json"}, data=tx_payload.to_json()) as resp:
                 result = await resp.json()
                 if "error" in result:
+                    logger.error(f"Helius RPC error: {result['error']}")
                     return None
                 tx_signature = result.get("result")
+                logger.info(f"Transaction sent: {tx_signature}")
 
         return {"token_mint": str(mint_keypair.pubkey()), "tx_signature": tx_signature, "signer_keypair": signer_keypair}
     except Exception as e:
@@ -1812,18 +1900,39 @@ async def transfer_spl_tokens(token_mint: str, recipient_wallet: str, signer_key
             instructions.append(create_ata_ix)
             logger.info(f"Added CreateIdempotent ATA instruction with token program {token_program_id}")
 
-        # Transfer instruction
+        # Transfer instruction - use TransferChecked for Token-2022 compatibility
         import struct
-        transfer_data = bytes([3]) + struct.pack('<Q', amount)
-        transfer_ix = Instruction(
-            program_id=token_program_id,  # Use detected program
-            accounts=[
-                AccountMeta(source_ata, is_signer=False, is_writable=True),
-                AccountMeta(dest_ata, is_signer=False, is_writable=True),
-                AccountMeta(signer_pubkey, is_signer=True, is_writable=False),
-            ],
-            data=transfer_data
-        )
+
+        # Get decimals for TransferChecked
+        decimals = 6  # pump.fun tokens have 6 decimals
+
+        if token_program_id == TOKEN_2022_PROGRAM_ID:
+            # TransferChecked instruction (discriminator = 12)
+            # Format: [12, amount (u64), decimals (u8)]
+            transfer_data = bytes([12]) + struct.pack('<Q', amount) + bytes([decimals])
+            transfer_ix = Instruction(
+                program_id=token_program_id,
+                accounts=[
+                    AccountMeta(source_ata, is_signer=False, is_writable=True),
+                    AccountMeta(mint_pubkey, is_signer=False, is_writable=False),  # mint required for TransferChecked
+                    AccountMeta(dest_ata, is_signer=False, is_writable=True),
+                    AccountMeta(signer_pubkey, is_signer=True, is_writable=False),
+                ],
+                data=transfer_data
+            )
+            logger.info(f"Using TransferChecked for Token-2022")
+        else:
+            # Standard Transfer instruction (discriminator = 3)
+            transfer_data = bytes([3]) + struct.pack('<Q', amount)
+            transfer_ix = Instruction(
+                program_id=token_program_id,
+                accounts=[
+                    AccountMeta(source_ata, is_signer=False, is_writable=True),
+                    AccountMeta(dest_ata, is_signer=False, is_writable=True),
+                    AccountMeta(signer_pubkey, is_signer=True, is_writable=False),
+                ],
+                data=transfer_data
+            )
         instructions.append(transfer_ix)
 
         logger.info(f"Transferring {amount} tokens from {source_ata} to {dest_ata}")
@@ -1925,20 +2034,29 @@ class APIServer:
         self.app.router.add_post("/api/launchpad/check-eligibility", self.launchpad_check_eligibility)
         self.app.router.add_post("/api/launchpad/submit", self.launchpad_submit)
         self.app.router.add_post("/api/launchpad/confirm/{launch_id}", self.launchpad_confirm)
+        # Launchpadtest routes (with vanity keys)
+        self.app.router.add_post("/api/launchpadtest/submit", self.launchpadtest_submit)
+        self.app.router.add_post("/api/launchpadtest/confirm/{launch_id}", self.launchpadtest_confirm)
         self.app.router.add_get("/api/launchpad/status/{launch_id}", self.launchpad_status)
         self.app.router.add_get("/api/launchpad/launches", self.launchpad_list)
         self.app.router.add_get("/api/launchpad/stats", self.launchpad_stats)
         self.app.router.add_get("/api/launchpad/agents", self.launchpad_agents)
         self.app.router.add_get("/api/agents/public", self.public_agents_list)  # Public endpoint for agents page
+        self.app.router.add_get("/api/pump-token/{mint}", self.pump_token_proxy)  # Proxy pump.fun API
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/test-oauth", self.launchpad_agent_test_oauth)
         self.app.router.add_get("/api/launchpad/agents/{agent_id}/reauth", self.launchpad_agent_reauth)
+        self.app.router.add_post("/api/agents/start-manual", self.start_agent_manual)
         self.app.router.add_get("/api/admin/wallets", self.admin_wallets)
+        self.app.router.add_post("/api/admin/vanity-keys", self.admin_upload_vanity_keys)
         self.app.router.add_post("/api/admin/clear", self.admin_clear_agents)
+        self.app.router.add_post("/api/admin/delete-launch", self.admin_delete_launch)
         self.app.router.add_post("/api/admin/stop", self.admin_stop_agent)
+        self.app.router.add_delete("/api/admin/agent/{username}", self.admin_delete_agent_by_username)
         self.app.router.add_post("/api/admin/transfer", self.admin_transfer_tokens)
         self.app.router.add_get("/api/admin/debug-mentions", self.admin_debug_mentions)
+        self.app.router.add_delete("/api/admin/launch/{launch_id}", self.admin_delete_launch_by_id)
 
         # X OAuth 2.0
         self.app.router.add_get("/api/x/auth", self.x_oauth_start)
@@ -1954,6 +2072,9 @@ class APIServer:
         self.app.router.add_post("/api/projects/launch", self.projects_launch)
         self.app.router.add_post("/api/projects/confirm/{launch_id}", self.projects_confirm)
         self.app.router.add_get("/api/projects/list", self.projects_list)
+
+        # Dev test endpoint (0.02 SOL fee)
+        self.app.router.add_post("/api/devtest/deploy", self.devtest_deploy)
 
         # Static file serving (only if polyweb folder exists - not needed on Railway)
         static_dir = Path(__file__).parent / 'polyweb'
@@ -2888,13 +3009,15 @@ class APIServer:
 
     async def launchpad_config(self, request):
         """Get frontend configuration (public values only)"""
+        unused_vanity = sum(1 for k in vanity_keypairs if not k.get('used', False))
         return web.json_response({
             "helius_rpc": HELIUS_RPC,
             "polyd_mint": POLYD_MINT,
             "required_balance": REQUIRED_POLYD_BALANCE,
             "launch_fee": LAUNCH_FEE_SOL,
             "payment_address": LAUNCHPAD_WALLET_PUBLIC_KEY,
-            "reown_project_id": os.getenv("REOWN_PROJECT_ID", "")
+            "reown_project_id": os.getenv("REOWN_PROJECT_ID", ""),
+            "vanity_keys_available": unused_vanity
         })
 
     async def launchpad_wallet(self, request):
@@ -3151,6 +3274,29 @@ class APIServer:
             logger.error(f"Launch submit error: {e}")
             return web.json_response({"success": False, "message": str(e)}, status=500)
 
+    async def launchpadtest_submit(self, request):
+        """Submit for launchpadtest - same as launchpad_submit but marks for vanity"""
+        # Reuse launchpad_submit logic
+        response = await self.launchpad_submit(request)
+        # Mark this launch for vanity keys
+        if response.status == 200:
+            try:
+                # response.body is bytes in aiohttp
+                body_bytes = response.body
+                if isinstance(body_bytes, bytes):
+                    data = json.loads(body_bytes.decode('utf-8'))
+                else:
+                    data = json.loads(body_bytes)
+                launch_id = data.get('launch_id')
+                if launch_id and launch_id in pending_launches:
+                    pending_launches[launch_id]['use_vanity'] = True
+                    pending_launches[launch_id]['is_test'] = True
+                    save_launches()
+                    logger.info(f"Marked launch {launch_id} for vanity keys (use_vanity=True, is_test=True)")
+            except Exception as e:
+                logger.error(f"Failed to mark launch for vanity: {e}")
+        return response
+
     async def launchpad_confirm(self, request):
         """Confirm payment, create token, and start agent"""
         launch_id = request.match_info.get('launch_id')
@@ -3187,7 +3333,7 @@ class APIServer:
         min_required = 0.02
         balance_sol = 0
 
-        for attempt in range(5):
+        for attempt in range(10):
             async with aiohttp.ClientSession() as session:
                 payload = {"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [dev_wallet_public]}
                 async with session.post(HELIUS_RPC, json=payload) as resp:
@@ -3198,8 +3344,8 @@ class APIServer:
             if balance_sol >= min_required:
                 break
 
-            logger.info(f"Balance check attempt {attempt + 1}: {balance_sol:.4f} SOL, waiting...")
-            await asyncio.sleep(3)
+            logger.info(f"Balance check attempt {attempt + 1}/10: {balance_sol:.4f} SOL, waiting...")
+            await asyncio.sleep(5)
 
         if balance_sol < min_required:
             return web.json_response({
@@ -3225,7 +3371,8 @@ class APIServer:
             twitter=launch.get("twitter_username"),
             telegram=launch.get("telegram"),
             dev_buy_sol=actual_dev_buy,
-            custom_signer_keypair=dev_wallet_keypair
+            custom_signer_keypair=dev_wallet_keypair,
+            use_vanity=launch.get("use_vanity", False)
         )
 
         if result:
@@ -3280,6 +3427,10 @@ class APIServer:
             launch["status"] = "failed"
             return web.json_response({"success": False, "message": "Failed to create token"}, status=500)
 
+    async def launchpadtest_confirm(self, request):
+        """Confirm for launchpadtest - same as launchpad_confirm"""
+        return await self.launchpad_confirm(request)
+
     async def launchpad_status(self, request):
         """Get status of a launch"""
         launch_id = request.match_info.get('launch_id')
@@ -3310,7 +3461,8 @@ class APIServer:
                     "token_ticker": l["token_ticker"],
                     "twitter_username": l.get("twitter_username"),
                     "created_at": l["created_at"],
-                    "token_mint": l.get("token_mint")
+                    "token_mint": l.get("token_mint"),
+                    "is_test": l.get("is_test", False)
                 }
                 for lid, l in pending_launches.items()
             ]
@@ -3357,6 +3509,40 @@ class APIServer:
 
         return web.json_response({"wallets": wallets})
 
+    async def admin_upload_vanity_keys(self, request):
+        """Upload vanity keypairs - for testing"""
+        global vanity_keypairs
+        try:
+            data = await request.json()
+            keys = data.get('keys', [])
+            if not keys:
+                return web.json_response({"error": "No keys provided"}, status=400)
+
+            # Add new keys to existing ones
+            for key in keys:
+                if 'pubkey' in key and 'private_key' in key:
+                    # Check if already exists
+                    exists = any(k['pubkey'] == key['pubkey'] for k in vanity_keypairs)
+                    if not exists:
+                        vanity_keypairs.append({
+                            "pubkey": key['pubkey'],
+                            "private_key": key['private_key'],
+                            "used": key.get('used', False)
+                        })
+
+            save_vanity_keypairs()
+            unused = sum(1 for k in vanity_keypairs if not k.get('used', False))
+            logger.info(f"Uploaded vanity keys, total: {len(vanity_keypairs)}, unused: {unused}")
+
+            return web.json_response({
+                "success": True,
+                "total": len(vanity_keypairs),
+                "unused": unused
+            })
+        except Exception as e:
+            logger.error(f"Error uploading vanity keys: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
     async def admin_clear_agents(self, request):
         """Admin endpoint to clear all agents and launches - PROTECTED BY SECRET"""
         secret = request.query.get('secret', '')
@@ -3389,6 +3575,34 @@ class APIServer:
             "launches_cleared": launches_count
         })
 
+    async def admin_delete_launch(self, request):
+        """Admin endpoint to delete a specific launch - PROTECTED BY SECRET"""
+        secret = request.query.get('secret', '')
+        if secret != SESSION_SECRET:
+            return web.json_response({"error": "Unauthorized"}, status=401)
+
+        launch_id = request.query.get('launch_id', '')
+        if not launch_id:
+            # List launches if no launch_id provided
+            launches_list = [
+                {"launch_id": lid, "token_name": l.get("token_name"), "status": l.get("status")}
+                for lid, l in pending_launches.items()
+            ]
+            return web.json_response({"launches": launches_list})
+
+        if launch_id not in pending_launches:
+            return web.json_response({"error": "Launch not found"}, status=404)
+
+        launch = pending_launches.pop(launch_id)
+        save_launches()
+        logger.info(f"Admin deleted launch {launch_id} ({launch.get('token_name')})")
+
+        return web.json_response({
+            "success": True,
+            "message": f"Deleted launch {launch_id}",
+            "token_name": launch.get("token_name")
+        })
+
     async def admin_stop_agent(self, request):
         """Admin endpoint to stop a specific agent - PROTECTED BY SECRET"""
         secret = request.query.get('secret', '')
@@ -3415,6 +3629,51 @@ class APIServer:
             "success": True,
             "message": f"Agent {agent_id} stopped",
             "username": agent.get("twitter_username")
+        })
+
+    async def admin_delete_agent_by_username(self, request):
+        """Delete agent by Twitter username - for testing"""
+        username = request.match_info.get('username', '').lower().replace('@', '')
+        if not username:
+            return web.json_response({"error": "Username required"}, status=400)
+
+        # Find and remove agent by username
+        found_id = None
+        for agent_id, agent in list(running_agents.items()):
+            if agent.get("twitter_username", "").lower() == username:
+                found_id = agent_id
+                break
+
+        if not found_id:
+            return web.json_response({"error": f"Agent @{username} not found"}, status=404)
+
+        removed = running_agents.pop(found_id)
+        save_agents()
+        logger.info(f"Deleted agent {found_id} (@{username})")
+
+        return web.json_response({
+            "success": True,
+            "message": f"Agent @{username} deleted",
+            "agent_id": found_id
+        })
+
+    async def admin_delete_launch_by_id(self, request):
+        """Delete launch by ID - for testing"""
+        launch_id = request.match_info.get('launch_id', '')
+        if not launch_id:
+            return web.json_response({"error": "Launch ID required"}, status=400)
+
+        if launch_id not in pending_launches:
+            return web.json_response({"error": f"Launch {launch_id} not found"}, status=404)
+
+        removed = pending_launches.pop(launch_id)
+        save_launches()
+        logger.info(f"Deleted launch {launch_id} ({removed.get('token_name')})")
+
+        return web.json_response({
+            "success": True,
+            "message": f"Launch {launch_id} deleted",
+            "token_name": removed.get("token_name")
         })
 
     async def admin_transfer_tokens(self, request):
@@ -3654,6 +3913,27 @@ class APIServer:
             "agents": agents_data
         })
 
+    async def pump_token_proxy(self, request):
+        """Proxy pump.fun API to avoid CORS"""
+        mint = request.match_info.get('mint')
+        if not mint:
+            return web.json_response({"error": "No mint provided"}, status=400)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"https://frontend-api.pump.fun/coins/{mint}",
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return web.json_response(data)
+                    else:
+                        return web.json_response({"error": "Token not found"}, status=404)
+        except Exception as e:
+            logger.error(f"pump_token_proxy error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
     async def launchpad_agent_refresh(self, request):
         """Re-login to Twitter using stored credentials"""
         agent_id = request.match_info.get('agent_id')
@@ -3856,6 +4136,80 @@ class APIServer:
             "agent_id": agent_id,
             "message": "Visit the auth_url to re-authenticate with X"
         })
+
+    async def start_agent_manual(self, request):
+        """Start an agent without creating a token - for existing Twitter accounts"""
+        try:
+            data = await request.json()
+
+            # Required fields
+            twitter_username = data.get("twitter_username", "").strip().lstrip("@")
+            profile_link = data.get("profile_link", "").strip()
+
+            if not twitter_username:
+                return web.json_response({"success": False, "message": "twitter_username required"}, status=400)
+            if not profile_link:
+                return web.json_response({"success": False, "message": "profile_link required"}, status=400)
+
+            # OAuth tokens (required for posting)
+            x_access_token = data.get("x_access_token")
+            x_refresh_token = data.get("x_refresh_token")
+            x_user_id = data.get("x_user_id")
+            x_expires_at = data.get("x_expires_at", time.time() + 7200)
+
+            if not x_access_token:
+                return web.json_response({"success": False, "message": "x_access_token required"}, status=400)
+
+            # Optional fields
+            agent_niche = data.get("agent_niche", "general")
+            custom_prompt = data.get("custom_prompt", "")
+            description = data.get("description", f"Prediction agent @{twitter_username}")
+            token_ticker = data.get("token_ticker", twitter_username.upper()[:10])
+
+            # Generate agent ID
+            agent_id = f"manual_{twitter_username}_{int(time.time())}"
+
+            # Check if agent with this username already exists
+            for aid, agent in running_agents.items():
+                if agent.get("twitter_username", "").lower() == twitter_username.lower():
+                    return web.json_response({
+                        "success": False,
+                        "message": f"Agent for @{twitter_username} already running (id: {aid})"
+                    }, status=400)
+
+            # Create launch data for start_agent
+            launch_data = {
+                "token_ticker": token_ticker,
+                "token_mint": None,  # No token
+                "twitter_username": twitter_username,
+                "profile_link": profile_link,
+                "agent_niche": agent_niche,
+                "custom_prompt": custom_prompt,
+                "description": description
+            }
+
+            oauth_tokens = {
+                "access_token": x_access_token,
+                "refresh_token": x_refresh_token,
+                "user_id": x_user_id,
+                "expires_at": x_expires_at
+            }
+
+            # Start the agent
+            await start_agent(agent_id, launch_data, oauth_tokens=oauth_tokens)
+
+            logger.info(f"Manual agent started: {agent_id} for @{twitter_username}")
+
+            return web.json_response({
+                "success": True,
+                "message": f"Agent started for @{twitter_username}",
+                "agent_id": agent_id,
+                "twitter_username": twitter_username
+            })
+
+        except Exception as e:
+            logger.error(f"Start manual agent error: {e}")
+            return web.json_response({"success": False, "message": str(e)}, status=500)
 
     # ==================== X OAuth 2.0 ====================
 
@@ -4423,6 +4777,71 @@ Be concise (2-3 paragraphs). Use lowercase. Focus on the actual markets shown.""
 
         return access_token
 
+    # ==================== DEV TEST DEPLOY (0.02 SOL fee) ====================
+
+    async def devtest_deploy(self, request):
+        """Dev test endpoint for token deployment with 0.02 SOL fee"""
+        try:
+            data = await request.json()
+            name = data.get('name', '').strip()
+            symbol = data.get('symbol', '').strip().upper()
+            description = data.get('description', '').strip()
+            image_url = data.get('image_url', '').strip()
+            wallet = data.get('wallet', '').strip()
+
+            if not name or not symbol:
+                return web.json_response({"success": False, "error": "Name and symbol required"}, status=400)
+
+            if not wallet:
+                return web.json_response({"success": False, "error": "Wallet address required"}, status=400)
+
+            # Get image data from URL or use placeholder
+            image_data = None
+            if image_url:
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(image_url) as resp:
+                            if resp.status == 200:
+                                image_data = await resp.read()
+                except:
+                    pass
+
+            if not image_data:
+                # Generate simple placeholder image
+                image_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03\x00\x01\x00\x05\xfe\xd4\x00\x00\x00\x00IEND\xaeB`\x82'
+
+            logger.info(f"DevTest deploy: {name} ({symbol}) for wallet {wallet[:8]}...")
+
+            # Create token on pump.fun (with vanity address)
+            # Dev buy is 0, fee is 0.02 SOL (handled separately if needed)
+            result = await create_token_on_pumpfun(
+                name=name,
+                symbol=symbol,
+                description=description or f"{name} token created via polydictions devtest",
+                image_data=image_data,
+                website="https://polydictions.xyz",
+                dev_buy_sol=0
+            )
+
+            if not result:
+                return web.json_response({"success": False, "error": "Failed to create token on pump.fun"}, status=500)
+
+            token_mint = result.get("token_mint")
+            tx_signature = result.get("tx_signature")
+
+            logger.info(f"DevTest token created: {token_mint}")
+
+            return web.json_response({
+                "success": True,
+                "token_mint": token_mint,
+                "tx_signature": tx_signature,
+                "pump_url": f"https://pump.fun/{token_mint}"
+            })
+
+        except Exception as e:
+            logger.error(f"DevTest deploy error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
     # ==================== PROJECT LAUNCHPAD (Token Only) ====================
 
     async def projects_launch(self, request):
@@ -4634,6 +5053,7 @@ if __name__ == "__main__":
     # Load launchpad data on startup
     load_launches()
     load_agents()
+    load_vanity_keypairs()
 
     server = APIServer()
     set_server_instance(server)
