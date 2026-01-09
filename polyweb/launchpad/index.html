@@ -6,6 +6,7 @@
     <title>launchpad - polydictions</title>
     <link rel="icon" type="image/png" href="../images/1.png">
     <link href="../stylesheet_0.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
 
     <style>
         * {
@@ -31,63 +32,6 @@
             max-width: 600px;
             margin: 0 auto;
             padding: 40px 20px;
-        }
-
-        /* Header */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 48px;
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: 800;
-            color: white;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 8px;
-        }
-
-        .nav-link {
-            padding: 10px 20px;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 500;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: transparent;
-            transition: all 0.2s;
-        }
-
-        .nav-link:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .nav-link.active {
-            background: white;
-            color: #fb651e;
-            border-color: white;
-        }
-
-        .connect-btn {
-            padding: 10px 20px;
-            background: white;
-            color: #fb651e;
-            border: none;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .connect-btn:hover {
-            background: rgba(255, 255, 255, 0.9);
-            transform: translateY(-1px);
         }
 
         /* Hero Section */
@@ -582,16 +526,6 @@
 
         /* Responsive */
         @media (max-width: 768px) {
-            .header {
-                padding: 16px 24px;
-                flex-wrap: wrap;
-                gap: 16px;
-            }
-
-            .nav-links {
-                display: none;
-            }
-
             .container {
                 padding: 24px 16px;
             }
@@ -636,42 +570,19 @@
     </style>
 </head>
 <body>
-    <!-- Password Protection -->
-    <div id="passwordOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #fb651e; z-index: 9999; display: flex; align-items: center; justify-content: center;">
-        <div style="text-align: center;">
-            <h2 style="margin-bottom: 20px; font-size: 24px;">enter password</h2>
-            <input type="password" id="sitePassword" placeholder="password" style="padding: 12px 20px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: white; font-size: 16px; width: 250px; text-align: center;" onkeypress="if(event.key==='Enter')checkPassword()">
-            <br><br>
-            <button onclick="checkPassword()" style="padding: 12px 30px; background: white; color: #fb651e; border: none; border-radius: 12px; font-weight: 600; cursor: pointer;">enter</button>
-            <p id="passwordError" style="color: #ffcccc; margin-top: 15px; display: none;">wrong password</p>
-        </div>
-    </div>
-    <script>
-        function checkPassword() {
-            const pwd = document.getElementById('sitePassword').value;
-            if (pwd === 'polyd2025') {
-                document.getElementById('passwordOverlay').style.display = 'none';
-                localStorage.setItem('launchpad_auth', 'true');
-            } else {
-                document.getElementById('passwordError').style.display = 'block';
-            }
-        }
-        // Check if already authenticated
-        if (localStorage.getItem('launchpad_auth') === 'true') {
-            document.getElementById('passwordOverlay').style.display = 'none';
-        }
-    </script>
-
-    <header class="header">
-        <a href="../" class="logo">polydictions</a>
-        <nav class="nav-links">
-            <a href="../markets/" class="nav-link">markets</a>
-            <a href="../alerts/" class="nav-link">alerts</a>
-            <a href="../whales/" class="nav-link">whales</a>
-            <a href="./" class="nav-link active">launchpad</a>
-            <a href="../agents/" class="nav-link">agents</a>
+    <header class="navbar">
+        <a href="../" class="navbar-logo">polydictions</a>
+        <nav class="navbar-links">
+            <a href="../markets/" class="navbar-link">markets</a>
+            <a href="../alerts/" class="navbar-link">alerts</a>
+            <a href="../whales/" class="navbar-link">whales</a>
+            <a href="../arbitrage/" class="navbar-link">arbitrage</a>
+            <a href="../research/" class="navbar-link">research</a>
+            <a href="../agents/" class="navbar-link">agents</a>
+            <a href="../roadmap/" class="navbar-link">roadmap</a>
+            <a href="./" class="navbar-link active">launchpad</a>
         </nav>
-        <button class="connect-btn" id="connectWallet">connect wallet</button>
+        <button class="btn" id="connectWallet">connect wallet</button>
     </header>
 
     <!-- Hero Section -->
@@ -1227,6 +1138,11 @@
                 throw new Error('Wallet not connected');
             }
 
+            if (!CONFIG.HELIUS_RPC || !CONFIG.HELIUS_RPC.startsWith('http')) {
+                console.error('Invalid HELIUS_RPC:', CONFIG.HELIUS_RPC);
+                throw new Error('Config not loaded properly. Please refresh the page.');
+            }
+
             const connection = new solanaWeb3.Connection(CONFIG.HELIUS_RPC);
             const fromPubkey = new solanaWeb3.PublicKey(userWalletAddress);
             const toPubkey = new solanaWeb3.PublicKey(paymentAddress);
@@ -1324,6 +1240,14 @@
                 return;
             }
 
+            if (!configLoaded || !CONFIG.HELIUS_RPC) {
+                await loadConfig();
+                if (!CONFIG.HELIUS_RPC) {
+                    alert('Failed to load config. Please refresh the page.');
+                    return;
+                }
+            }
+
             if (polydBalance < CONFIG.REQUIRED_BALANCE) {
                 alert(`You need at least ${CONFIG.REQUIRED_BALANCE.toLocaleString()} $POLYD to launch`);
                 return;
@@ -1364,9 +1288,10 @@
                 });
 
                 const submitData = await submitResp.json();
+                console.log('Submit response:', submitResp.status, submitData);
 
                 if (!submitResp.ok) {
-                    throw new Error(submitData.detail || 'Failed to submit launch');
+                    throw new Error(submitData.message || submitData.detail || 'Failed to submit launch');
                 }
 
                 const launchId = submitData.launch_id;
@@ -1430,7 +1355,7 @@
                     const container = document.getElementById('launchHistory');
                     const noLaunches = document.getElementById('noLaunches');
 
-                    const completedLaunches = data.launches.filter(l => l.status === 'completed');
+                    const completedLaunches = data.launches.filter(l => l.status === 'completed' && !l.is_test);
 
                     if (completedLaunches.length > 0) {
                         noLaunches.style.display = 'none';

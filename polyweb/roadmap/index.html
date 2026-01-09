@@ -8,101 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --primary: #fb651e;
-            --text-white: #ffffff;
-            --text-muted-light: rgba(255, 255, 255, 0.7);
-            --border-light: rgba(255, 255, 255, 0.3);
-            --green: #4ADE80;
-            --yellow: #FBBF24;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--primary);
-            color: white;
-            min-height: 100vh;
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        /* Navigation */
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 48px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: var(--primary);
-        }
-
-        .navbar-logo {
-            font-size: 24px;
-            font-weight: 800;
-            color: var(--text-white);
-        }
-
-        .navbar-links {
-            display: flex;
-            gap: 8px;
-        }
-
-        .navbar-link {
-            padding: 10px 20px;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-white);
-            border: 1px solid var(--border-light);
-            background: transparent;
-            transition: all 0.2s;
-        }
-
-        .navbar-link:hover {
-            background: rgba(255, 255, 255, 0.15);
-        }
-
-        .navbar-link.active {
-            background: var(--text-white);
-            color: var(--primary);
-            border-color: var(--text-white);
-        }
-
-        .navbar-right {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .navbar-social {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: rgba(255, 255, 255, 0.15);
-            border: 1px solid var(--border-light);
-            border-radius: 24px;
-            font-size: 14px;
-            color: var(--text-white);
-            transition: all 0.2s;
-        }
-
-        .navbar-social:hover {
-            background: rgba(255, 255, 255, 0.25);
-        }
-
         /* Main content */
         main {
             max-width: 900px;
@@ -244,16 +151,6 @@
         }
 
         @media (max-width: 640px) {
-            .navbar {
-                padding: 16px 24px;
-                flex-wrap: wrap;
-                gap: 16px;
-            }
-
-            .navbar-links {
-                display: none;
-            }
-
             h1 {
                 font-size: 32px;
                 margin-bottom: 40px;
@@ -284,7 +181,6 @@
             <a href="/whales/" class="navbar-link">whales</a>
             <a href="/arbitrage/" class="navbar-link">arbitrage</a>
             <a href="/launchpad/" class="navbar-link">launchpad</a>
-            <a href="/agents/" class="navbar-link">agents</a>
             <a href="/roadmap/" class="navbar-link active">roadmap</a>
         </div>
         <div class="navbar-right">
