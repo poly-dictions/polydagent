@@ -6,6 +6,7 @@
     <title>project launchpad - polydictions</title>
     <link rel="icon" type="image/png" href="../../images/1.png">
     <link href="../../stylesheet_0.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
     <script src="https://bundle.run/buffer@6.0.3"></script>
     <script>window.Buffer = window.Buffer || buffer.Buffer;</script>
     <script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
@@ -21,38 +22,6 @@
         }
         a { color: inherit; text-decoration: none; }
         .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 48px;
-        }
-        .logo { font-size: 24px; font-weight: 800; color: white; }
-        .nav-links { display: flex; gap: 8px; }
-        .nav-link {
-            padding: 10px 20px;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 500;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            background: transparent;
-            transition: all 0.2s;
-        }
-        .nav-link:hover { background: rgba(255, 255, 255, 0.15); }
-        .nav-link.active { background: white; color: #fb651e; border-color: white; }
-        .connect-btn {
-            padding: 10px 20px;
-            background: white;
-            color: #fb651e;
-            border: none;
-            border-radius: 24px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .connect-btn:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); }
         .hero { text-align: center; padding: 40px 20px 20px; }
         .hero h1 { font-size: 48px; font-weight: 800; margin-bottom: 8px; text-transform: lowercase; }
         .hero p { color: rgba(255, 255, 255, 0.7); font-size: 18px; text-transform: lowercase; margin-bottom: 24px; }
@@ -184,15 +153,19 @@
     </style>
 </head>
 <body>
-    <header class="header">
-        <a href="../../" class="logo">polydictions</a>
-        <nav class="nav-links">
-            <a href="../../markets/" class="nav-link">markets</a>
-            <a href="../../alerts/" class="nav-link">alerts</a>
-            <a href="../../whales/" class="nav-link">whales</a>
-            <a href="../" class="nav-link active">launchpad</a>
+    <header class="navbar">
+        <a href="../../" class="navbar-logo">polydictions</a>
+        <nav class="navbar-links">
+            <a href="../../markets/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
+            <a href="../../alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
+            <a href="../../whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
+            <a href="../../arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
+            <a href="../../research/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">research</a>
+            <a href="../../agents/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">agents</a>
+            <a href="../../roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
+            <a href="../" class="navbar-link active" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
         </nav>
-        <button class="connect-btn" id="connectWallet">connect wallet</button>
+        <button class="btn" id="connectWallet">connect wallet</button>
     </header>
 
     <section class="hero">
@@ -200,8 +173,8 @@
         <p>launch your polymarket project token on pump.fun</p>
 
         <div style="display: flex; justify-content: center; gap: 12px; margin: 20px 0;">
-            <a href="../" class="nav-link">ai agents</a>
-            <a href="./" class="nav-link" style="background: white; color: #fb651e; border-color: white;">projects</a>
+            <a href="../" class="btn">ai agents</a>
+            <a href="./" class="btn" style="background: white; color: #fb651e;">projects</a>
         </div>
 
     </section>

@@ -144,17 +144,23 @@
             align-items: center;
             gap: 8px;
             padding: 8px 16px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid var(--border-light);
+            background: linear-gradient(135deg,rgba(255,255,255,0.25) 0%,rgba(255,255,255,0.1) 50%,rgba(255,255,255,0.05) 100%);
+            border: 1px solid rgba(255,255,255,0.3);
             border-radius: 20px;
             cursor: pointer;
-            transition: all 0.2s;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            backdrop-filter: blur(20px);
+            transform-style: preserve-3d;
+            transition: 0.15s cubic-bezier(0.4,0,0.2,1);
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px);
             color: var(--text-white);
             font-size: 13px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
 
         .sound-toggle:hover {
-            background: rgba(255, 255, 255, 0.2);
+            transform: perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25), 0 0 40px rgba(251,101,30,0.3);
         }
 
         .sound-toggle.muted {
@@ -471,7 +477,6 @@
             <a href="/whales/" class="navbar-link">whales</a>
             <a href="/arbitrage/" class="navbar-link">arbitrage</a>
             <a href="/launchpad/" class="navbar-link">launchpad</a>
-            <a href="/agents/" class="navbar-link">agents</a>
             <a href="/roadmap/" class="navbar-link">roadmap</a>
         </div>
         <div class="navbar-right">

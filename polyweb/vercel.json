@@ -17,7 +17,11 @@
     { "source": "/launchpad/projects", "destination": "/launchpad/projects/index.html" },
     { "source": "/launchpad/projects/", "destination": "/launchpad/projects/index.html" },
     { "source": "/launchpad/agents", "destination": "/launchpad/agents/index.html" },
-    { "source": "/launchpad/agents/", "destination": "/launchpad/agents/index.html" }
+    { "source": "/launchpad/agents/", "destination": "/launchpad/agents/index.html" },
+    { "source": "/launchpadtest", "destination": "/launchpadtest/index.html" },
+    { "source": "/launchpadtest/", "destination": "/launchpadtest/index.html" },
+    { "source": "/admin/agent", "destination": "/admin/agent.html" },
+    { "source": "/admin/agent/", "destination": "/admin/agent.html" }
   ],
   "headers": [
     {

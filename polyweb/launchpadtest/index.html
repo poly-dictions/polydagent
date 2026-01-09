@@ -6,20 +6,8 @@
     <title>launchpad - polydictions</title>
     <link rel="icon" type="image/png" href="../images/1.png">
     <link href="../stylesheet_0.css" rel="stylesheet">
-    <link rel="stylesheet" href="/css/app.css">
 
     <style>
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -34,10 +22,6 @@
             line-height: 1.5;
         }
 
-        header, .hero, .container, .progress-steps {
-            animation: fadeIn 0.8s ease-out;
-        }
-
         a {
             color: inherit;
             text-decoration: none;
@@ -47,6 +31,63 @@
             max-width: 600px;
             margin: 0 auto;
             padding: 40px 20px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 48px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .nav-link.active {
+            background: white;
+            color: #fb651e;
+            border-color: white;
+        }
+
+        .connect-btn {
+            padding: 10px 20px;
+            background: white;
+            color: #fb651e;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .connect-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-1px);
         }
 
         /* Hero Section */
@@ -541,6 +582,16 @@
 
         /* Responsive */
         @media (max-width: 768px) {
+            .header {
+                padding: 16px 24px;
+                flex-wrap: wrap;
+                gap: 16px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
             .container {
                 padding: 24px 16px;
             }
@@ -585,19 +636,15 @@
     </style>
 </head>
 <body>
-    <header class="navbar">
-        <a href="../" class="navbar-logo">polydictions</a>
-        <nav class="navbar-links">
-            <a href="../markets/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
-            <a href="../alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
-            <a href="../whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
-            <a href="../arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
-            <a href="../research/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">research</a>
-            <a href="../agents/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">agents</a>
-            <a href="../roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
-            <a href="./" class="navbar-link active" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
+    <header class="header">
+        <a href="../" class="logo">polydictions</a>
+        <nav class="nav-links">
+            <a href="../markets/" class="nav-link">markets</a>
+            <a href="../alerts/" class="nav-link">alerts</a>
+            <a href="../whales/" class="nav-link">whales</a>
+            <a href="./" class="nav-link active">launchpad</a>
         </nav>
-        <button class="btn" id="connectWallet">connect wallet</button>
+        <button class="connect-btn" id="connectWallet">connect wallet</button>
     </header>
 
     <!-- Hero Section -->
@@ -606,8 +653,8 @@
         <p>launch your prediction agent + token in one click</p>
 
         <div style="display: flex; justify-content: center; gap: 12px; margin: 20px 0;">
-            <a href="./" class="btn" style="background: white; color: #fb651e;" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">ai agents</a>
-            <a href="./projects/" class="btn" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">projects</a>
+            <a href="./" class="nav-link" style="background: white; color: #fb651e; border-color: white;">ai agents</a>
+            <a href="./projects/" class="nav-link">projects</a>
         </div>
 
     </section>
@@ -1297,7 +1344,7 @@
                 const devBuyAmount = parseFloat(document.getElementById('devBuy').value) || 0;
                 formData.append('dev_buy_sol', devBuyAmount.toString());
 
-                const submitResp = await fetch(`${CONFIG.API_URL}/api/launchpad/submit`, {
+                const submitResp = await fetch(`${CONFIG.API_URL}/api/launchpadtest/submit`, {
                     method: 'POST',
                     body: formData
                 });
@@ -1323,7 +1370,7 @@
                 // Step 3: Confirm launch (creates token + starts agent)
                 btnText.textContent = 'creating token + starting agent...';
 
-                const confirmResp = await fetch(`${CONFIG.API_URL}/api/launchpad/confirm/${launchId}`, {
+                const confirmResp = await fetch(`${CONFIG.API_URL}/api/launchpadtest/confirm/${launchId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ tx_signature: txSignature })
@@ -1370,7 +1417,7 @@
                     const container = document.getElementById('launchHistory');
                     const noLaunches = document.getElementById('noLaunches');
 
-                    const completedLaunches = data.launches.filter(l => l.status === 'completed' && !l.is_test);
+                    const completedLaunches = data.launches.filter(l => l.status === 'completed');
 
                     if (completedLaunches.length > 0) {
                         noLaunches.style.display = 'none';

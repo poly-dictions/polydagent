@@ -10,238 +10,30 @@
     <link rel="stylesheet" href="/css/app.css">
     <link rel="icon" type="image/png" href="/images/1.png">
     <style>
-        /* Agent Cards */
-        .agent-card {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
+        .coming-soon {
+            min-height: 60vh;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            transition: all 0.2s;
-            border: 1px solid transparent;
-        }
-
-        .agent-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            border-color: var(--primary);
-        }
-
-        .agent-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .agent-avatar {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            object-fit: cover;
-            background: linear-gradient(135deg, var(--primary) 0%, #ff8c42 100%);
-        }
-
-        .agent-avatar-placeholder {
-            width: 64px;
-            height: 64px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary) 0%, #ff8c42 100%);
-            display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .agent-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .agent-name {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-dark);
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .agent-ticker {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--primary);
-            background: rgba(251, 101, 30, 0.1);
-            padding: 2px 8px;
-            border-radius: 6px;
-        }
-
-        .agent-handle {
-            font-size: 14px;
-            color: var(--text-muted);
-        }
-
-        .agent-handle a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        .agent-handle a:hover {
-            color: var(--primary);
-        }
-
-        .agent-stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-
-        .stat-item {
-            background: var(--bg-light);
-            padding: 12px;
-            border-radius: 10px;
-        }
-
-        .stat-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-dark);
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .agent-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 12px;
-            border-top: 1px solid var(--bg-light);
-        }
-
-        .agent-niche {
-            font-size: 12px;
-            font-weight: 500;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            background: var(--primary);
-        }
-
-        .agent-status {
-            font-size: 12px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        .status-running .status-dot {
-            background: var(--green);
-            box-shadow: 0 0 8px var(--green);
-        }
-
-        .status-stopped .status-dot {
-            background: var(--red);
-        }
-
-        .agent-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: auto;
-        }
-
-        .agent-btn {
-            flex: 1;
-            padding: 10px 16px;
-            border-radius: 10px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            text-decoration: none;
-        }
-
-        .agent-btn-primary {
-            background: var(--primary);
-            color: white;
-            border: none;
-        }
-
-        .agent-btn-primary:hover {
-            background: #e55a1a;
-        }
-
-        .agent-btn-secondary {
-            background: white;
-            color: var(--text-dark);
-            border: 1px solid var(--border);
-        }
-
-        .agent-btn-secondary:hover {
-            background: var(--bg-light);
-        }
-
-        /* Sort Filters */
-        .sort-row {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .sort-row .filter-group {
-            flex-shrink: 0;
-        }
-
-        /* Bonding badge */
-        .bonding-badge {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: var(--green);
-            color: white;
-        }
-
-        /* Empty State */
-        .empty-state {
             text-align: center;
-            padding: 80px 20px;
+            padding: 40px 20px;
         }
-
-        .empty-state h3 {
-            font-size: 24px;
-            margin-bottom: 12px;
+        .coming-soon h1 {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
             color: white;
-            font-weight: 700;
         }
-
-        .empty-state p {
-            color: rgba(255, 255, 255, 0.9);
-            margin-bottom: 24px;
+        .coming-soon p {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 32px;
+            max-width: 500px;
         }
-
-        .empty-state .btn-primary {
+        .coming-soon .btn {
             background: white;
-            color: var(--primary);
+            color: #fb651e;
             padding: 14px 28px;
             border-radius: 12px;
             font-weight: 600;
@@ -249,8 +41,7 @@
             display: inline-block;
             transition: all 0.2s;
         }
-
-        .empty-state .btn-primary:hover {
+        .coming-soon .btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
@@ -261,17 +52,16 @@
     <nav class="navbar">
         <a href="/" class="navbar-logo">polydictions</a>
         <div class="navbar-links">
-            <a href="/" class="navbar-link">home</a>
-            <a href="/markets/" class="navbar-link">markets</a>
-            <a href="/alerts/" class="navbar-link">alerts</a>
-            <a href="/whales/" class="navbar-link">whales</a>
-            <a href="/arbitrage/" class="navbar-link">arbitrage</a>
-            <a href="/launchpad/" class="navbar-link">launchpad</a>
-            <a href="/agents/" class="navbar-link active">agents</a>
-            <a href="/roadmap/" class="navbar-link">roadmap</a>
+            <a href="/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">home</a>
+            <a href="/markets/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
+            <a href="/alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
+            <a href="/whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
+            <a href="/arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
+            <a href="/launchpad/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
+            <a href="/roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
         </div>
         <div class="navbar-right">
-            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-15;const rotateY=((x-centerX)/centerX)*15;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
@@ -282,29 +72,10 @@
 
     <!-- Main Content -->
     <main class="container">
-        <!-- Page Header -->
-        <div class="page-header">
-            <h1 class="page-title">prediction agents</h1>
-            <p class="page-subtitle">AI-powered prediction agents launched through polydictions launchpad</p>
-        </div>
-
-        <!-- Sort Filters -->
-        <div class="category-section">
-            <div class="sort-row">
-                <div class="filter-group" id="sortFilters">
-                    <button class="filter-btn active" data-sort="market_cap">market cap</button>
-                    <button class="filter-btn" data-sort="created_at">newest</button>
-                    <button class="filter-btn" data-sort="name">name</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Agents Grid -->
-        <div class="grid grid-3" id="agentsGrid">
-            <div class="loading-centered" style="grid-column: 1/-1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50vh; gap: 16px;">
-                <div class="spinner"></div>
-                <div style="color: var(--text-muted-light); font-size: 14px;">loading agents...</div>
-            </div>
+        <div class="coming-soon">
+            <h1>coming soon</h1>
+            <p>AI-powered prediction agents launching through polydictions launchpad. stay tuned!</p>
+            <a href="/launchpad/" class="btn">go to launchpad</a>
         </div>
     </main>
 
@@ -312,202 +83,5 @@
     <footer class="footer">
         <p>&copy; 2026 polydictions. prediction markets intelligence.</p>
     </footer>
-
-    <script>
-        // State
-        let allAgents = [];
-        let currentSort = 'market_cap';
-
-        // API base
-        const API_BASE = window.location.hostname === 'localhost'
-            ? 'http://localhost:5777'
-            : 'https://polydictions-production.up.railway.app';
-
-        // Demo agents to show UI (will be replaced by real data)
-        const DEMO_AGENTS = [
-            {
-                id: 'demo1',
-                name: 'CryptoOracle',
-                ticker: 'ORACLE',
-                niche: 'crypto',
-                twitter_handle: 'cryptooracle_ai',
-                token_mint: '3MhkQTvkYbbwRvuUM5Z4kANUf8C1MyvGytjRGcQhGx2M',
-                created_at: Date.now() / 1000 - 86400 * 3,
-                status: 'running',
-                image_url: '',
-                market_cap: 125000,
-                bonding_complete: false
-            },
-            {
-                id: 'demo2',
-                name: 'PoliticsGPT',
-                ticker: 'PGPT',
-                niche: 'politics',
-                twitter_handle: 'politicsgpt',
-                token_mint: 'DemoMint2xxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-                created_at: Date.now() / 1000 - 86400 * 7,
-                status: 'running',
-                image_url: '',
-                market_cap: 89000,
-                bonding_complete: false
-            },
-            {
-                id: 'demo3',
-                name: 'SportsPredictor',
-                ticker: 'SPORT',
-                niche: 'sports',
-                twitter_handle: 'sportspredictor',
-                token_mint: 'DemoMint3xxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
-                created_at: Date.now() / 1000 - 86400 * 14,
-                status: 'running',
-                image_url: '',
-                market_cap: 450000,
-                bonding_complete: true
-            }
-        ];
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadAgents();
-            setupEventListeners();
-        });
-
-        async function loadAgents() {
-            const grid = document.getElementById('agentsGrid');
-            grid.innerHTML = '<div style="grid-column: 1/-1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50vh; gap: 16px;"><div class="spinner"></div><div style="color: var(--text-muted-light); font-size: 14px;">loading agents...</div></div>';
-
-            try {
-                const response = await fetch(`${API_BASE}/api/agents/public?sort=${currentSort}&order=desc`);
-                const data = await response.json();
-
-                if (data.success && data.agents && data.agents.length > 0) {
-                    allAgents = data.agents;
-                } else {
-                    // Show demo agents if no real agents
-                    allAgents = DEMO_AGENTS;
-                }
-                renderAgents();
-            } catch (error) {
-                console.error('loadAgents error:', error);
-                // Show demo agents on error
-                allAgents = DEMO_AGENTS;
-                renderAgents();
-            }
-        }
-
-        function formatCurrency(value) {
-            if (!value || value === 0) return '$0';
-            if (value >= 1000000) {
-                return `$${(value / 1000000).toFixed(2)}M`;
-            } else if (value >= 1000) {
-                return `$${(value / 1000).toFixed(1)}K`;
-            }
-            return `$${value.toFixed(0)}`;
-        }
-
-        function formatDate(timestamp) {
-            if (!timestamp) return 'N/A';
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        }
-
-        function getInitials(name) {
-            if (!name) return '?';
-            return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-        }
-
-        function renderAgents() {
-            const grid = document.getElementById('agentsGrid');
-
-            if (allAgents.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state" style="grid-column: 1/-1">
-                        <h3>no agents launched yet</h3>
-                        <p>be the first to launch a prediction agent on polydictions!</p>
-                        <a href="/launchpad/" class="btn btn-primary">launch your agent</a>
-                    </div>
-                `;
-                return;
-            }
-
-            grid.innerHTML = allAgents.map(agent => {
-                const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
-                const statusText = agent.status === 'running' ? 'Active' : (agent.status || 'Unknown');
-
-                return `
-                    <div class="agent-card">
-                        <div class="agent-header">
-                            ${agent.image_url
-                                ? `<img src="${agent.image_url}" alt="${agent.name}" class="agent-avatar">`
-                                : `<div class="agent-avatar-placeholder">${getInitials(agent.name)}</div>`
-                            }
-                            <div class="agent-info">
-                                <div class="agent-name">
-                                    ${agent.name || 'Unknown Agent'}
-                                    ${agent.ticker ? `<span class="agent-ticker">$${agent.ticker}</span>` : ''}
-                                    ${agent.bonding_complete ? `<span class="bonding-badge">Graduated</span>` : ''}
-                                </div>
-                                <div class="agent-handle">
-                                    ${agent.twitter_handle
-                                        ? `<a href="https://x.com/${agent.twitter_handle}" target="_blank">@${agent.twitter_handle}</a>`
-                                        : 'No Twitter'
-                                    }
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="agent-stats">
-                            <div class="stat-item">
-                                <div class="stat-value">${formatCurrency(agent.market_cap)}</div>
-                                <div class="stat-label">Market Cap</div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="stat-value">${formatDate(agent.created_at)}</div>
-                                <div class="stat-label">Launched</div>
-                            </div>
-                        </div>
-
-                        <div class="agent-meta">
-                            <span class="agent-niche">${agent.niche || 'general'}</span>
-                            <span class="agent-status ${statusClass}">
-                                <span class="status-dot"></span>
-                                ${statusText}
-                            </span>
-                        </div>
-
-                        <div class="agent-actions">
-                            ${agent.twitter_handle
-                                ? `<a href="https://x.com/${agent.twitter_handle}" target="_blank" class="agent-btn agent-btn-primary">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                                    </svg>
-                                    View on X
-                                </a>`
-                                : ''
-                            }
-                            ${agent.token_mint
-                                ? `<a href="https://pump.fun/coin/${agent.token_mint}" target="_blank" class="agent-btn agent-btn-secondary">
-                                    View Token
-                                </a>`
-                                : ''
-                            }
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function setupEventListeners() {
-            // Sort filters
-            document.querySelectorAll('#sortFilters [data-sort]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('#sortFilters [data-sort]').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    currentSort = btn.dataset.sort;
-                    loadAgents();
-                });
-            });
-        }
-    </script>
 </body>
 </html>

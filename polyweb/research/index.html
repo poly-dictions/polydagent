@@ -314,15 +314,38 @@
         /* Placeholder message */
         .placeholder-msg {
             text-align: center;
-            color: #999;
-            padding: 40px 20px;
-            font-size: 14px;
+            padding: 60px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .placeholder-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #fb651e 0%, #ff8a50 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .placeholder-icon svg {
+            width: 32px;
+            height: 32px;
+            color: white;
+        }
+
+        .placeholder-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
         }
 
         .placeholder-msg .hint {
-            color: #bbb;
-            font-size: 13px;
-            margin-top: 8px;
+            color: #999;
+            font-size: 14px;
         }
 
         /* Loading */
@@ -370,7 +393,7 @@
         .quick-action {
             padding: 8px 16px;
             background: #f5f5f5;
-            border: 1px solid #e5e5e5;
+            border: none;
             border-radius: 20px;
             font-size: 13px;
             color: #666;
@@ -381,7 +404,6 @@
         .quick-action:hover {
             background: #fb651e;
             color: white;
-            border-color: #fb651e;
         }
 
         /* Mobile */
@@ -431,8 +453,8 @@
         <div class="chat-container">
             <div class="messages" id="messages">
                 <div class="placeholder-msg">
-                    <div>ask any question about prediction markets</div>
-                    <div class="hint">https://polymarket.com/event/... or ask question directly</div>
+                    <div class="placeholder-title">ask anything about prediction markets</div>
+                    <div class="hint">paste a polymarket url or ask a question</div>
                 </div>
             </div>
 

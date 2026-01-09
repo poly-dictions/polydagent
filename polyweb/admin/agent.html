@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start Agent - Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: #2a2a2a;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #fb651e;
+        }
+        .form-group {
+            margin-bottom: 16px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 10px;
+            color: white;
+            font-size: 14px;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #fb651e;
+        }
+        textarea { min-height: 80px; resize: vertical; }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #fb651e;
+            color: white;
+        }
+        .btn-primary:hover { background: #e55a1a; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary {
+            background: #1da1f2;
+            color: white;
+            margin-bottom: 16px;
+        }
+        .btn-secondary:hover { background: #1a8cd8; }
+        .status {
+            padding: 12px 16px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .status.success { background: #065f46; color: #6ee7b7; }
+        .status.error { background: #7f1d1d; color: #fca5a5; }
+        .status.info { background: #1e3a5f; color: #93c5fd; }
+        .connected {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: #065f46;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .connected .avatar {
+            width: 40px;
+            height: 40px;
+            background: #1da1f2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .connected .info { flex: 1; }
+        .connected .username { font-weight: 600; }
+        .connected .status-text { color: #6ee7b7; font-size: 13px; }
+        .hidden { display: none !important; }
+        .token-display {
+            background: #1a1a1a;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin-top: 8px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Start Agent Manually</h1>
+        <p class="subtitle">Launch a prediction agent without creating a token</p>
+
+        <!-- Step 1: Connect X -->
+        <div class="card" id="step1">
+            <h2>Step 1: Connect X Account</h2>
+
+            <div class="connected hidden" id="connectedStatus">
+                <div class="avatar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                </div>
+                <div class="info">
+                    <div class="username" id="connectedUsername">@username</div>
+                    <div class="status-text">Connected</div>
+                </div>
+            </div>
+
+            <button class="btn btn-secondary" id="connectBtn" onclick="connectX()">
+                Connect with X
+            </button>
+
+            <div class="token-display hidden" id="tokenDisplay">
+                <strong>Tokens received:</strong><br>
+                Access: <span id="accessTokenPreview">...</span><br>
+                User ID: <span id="userIdPreview">...</span>
+            </div>
+        </div>
+
+        <!-- Step 2: Agent Config -->
+        <div class="card">
+            <h2>Step 2: Agent Configuration</h2>
+
+            <div class="form-group">
+                <label>Twitter Username *</label>
+                <input type="text" id="twitterUsername" placeholder="@polydaget">
+            </div>
+
+            <div class="form-group">
+                <label>Polymarket Profile URL *</label>
+                <input type="url" id="profileLink" placeholder="https://polymarket.com/profile/0x...">
+            </div>
+
+            <div class="form-group">
+                <label>Agent Niche</label>
+                <select id="agentNiche">
+                    <option value="general">General (all topics)</option>
+                    <option value="crypto">Crypto & Blockchain</option>
+                    <option value="politics">Politics & Elections</option>
+                    <option value="sports">Sports</option>
+                    <option value="tech">Technology & AI</option>
+                    <option value="finance">Finance & Economy</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Custom Prompt (optional)</label>
+                <textarea id="customPrompt" placeholder="Give clear market calls with confidence levels. Use gen-z slang."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Description (optional)</label>
+                <textarea id="description" placeholder="AI-powered Polymarket prediction agent"></textarea>
+            </div>
+        </div>
+
+        <!-- Status -->
+        <div class="status hidden" id="statusMessage"></div>
+
+        <!-- Submit -->
+        <button class="btn btn-primary" id="startBtn" onclick="startAgent()" disabled>
+            Start Agent
+        </button>
+    </div>
+
+    <script>
+        // Always use production API for OAuth (X OAuth callback is configured for production)
+        const API_URL = 'https://polydictions-production.up.railway.app';
+
+        let xTokens = null;
+
+        async function connectX() {
+            const btn = document.getElementById('connectBtn');
+            btn.textContent = 'Connecting...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(`${API_URL}/api/x/auth`);
+                const data = await resp.json();
+
+                if (data.success && data.auth_url) {
+                    // Open popup
+                    const width = 600, height = 700;
+                    const left = (screen.width - width) / 2;
+                    const top = (screen.height - height) / 2;
+
+                    window.open(
+                        data.auth_url,
+                        'X OAuth',
+                        `width=${width},height=${height},left=${left},top=${top}`
+                    );
+                }
+            } catch (err) {
+                showStatus('Failed to start OAuth: ' + err.message, 'error');
+            }
+
+            btn.textContent = 'Connect with X';
+            btn.disabled = false;
+        }
+
+        // Listen for OAuth callback
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'x_oauth_success') {
+                xTokens = {
+                    access_token: event.data.access_token,
+                    refresh_token: event.data.refresh_token,
+                    user_id: event.data.user_id,
+                    expires_at: Math.floor(Date.now() / 1000) + (event.data.expires_in || 7200)
+                };
+
+                // Update UI
+                document.getElementById('connectedStatus').classList.remove('hidden');
+                document.getElementById('connectedUsername').textContent = '@' + event.data.username;
+                document.getElementById('connectBtn').classList.add('hidden');
+
+                document.getElementById('tokenDisplay').classList.remove('hidden');
+                document.getElementById('accessTokenPreview').textContent = xTokens.access_token.substring(0, 30) + '...';
+                document.getElementById('userIdPreview').textContent = xTokens.user_id;
+
+                // Pre-fill username
+                document.getElementById('twitterUsername').value = event.data.username;
+
+                // Enable start button
+                document.getElementById('startBtn').disabled = false;
+
+                showStatus('Connected as @' + event.data.username, 'success');
+            }
+        });
+
+        async function startAgent() {
+            if (!xTokens) {
+                showStatus('Please connect with X first', 'error');
+                return;
+            }
+
+            const username = document.getElementById('twitterUsername').value.trim().replace('@', '');
+            const profileLink = document.getElementById('profileLink').value.trim();
+
+            if (!username) {
+                showStatus('Twitter username is required', 'error');
+                return;
+            }
+            if (!profileLink) {
+                showStatus('Polymarket profile URL is required', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('startBtn');
+            btn.textContent = 'Starting...';
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch(`${API_URL}/api/agents/start-manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        twitter_username: username,
+                        profile_link: profileLink,
+                        agent_niche: document.getElementById('agentNiche').value,
+                        custom_prompt: document.getElementById('customPrompt').value,
+                        description: document.getElementById('description').value || `Prediction agent @${username}`,
+                        x_access_token: xTokens.access_token,
+                        x_refresh_token: xTokens.refresh_token,
+                        x_user_id: xTokens.user_id,
+                        x_expires_at: xTokens.expires_at
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (data.success) {
+                    showStatus(`Agent started! ID: ${data.agent_id}`, 'success');
+                    btn.textContent = 'Agent Running!';
+                } else {
+                    showStatus('Failed: ' + (data.message || 'Unknown error'), 'error');
+                    btn.textContent = 'Start Agent';
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                showStatus('Error: ' + err.message, 'error');
+                btn.textContent = 'Start Agent';
+                btn.disabled = false;
+            }
+        }
+
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = 'status ' + type;
+            el.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
