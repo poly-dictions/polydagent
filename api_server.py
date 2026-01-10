@@ -2318,10 +2318,12 @@ class APIServer:
         self.app.router.add_get("/api/watchlist/{user_id}", self.get_watchlist)
         self.app.router.add_post("/api/watchlist/{user_id}", self.update_watchlist)
         self.app.router.add_get("/api/events", self.get_events)
+        self.app.router.add_get("/api/dome/events", self.get_dome_events)  # Dome API integration
         self.app.router.add_get("/api/new-markets", self.get_new_markets)
         self.app.router.add_get("/api/arbitrage", self.get_arbitrage)
         self.app.router.add_get("/api/alerts", self.get_alerts)
         self.app.router.add_get("/api/context", self.get_market_context)
+        self.app.router.add_get("/api/kalshi/context", self.get_kalshi_context)  # Kalshi AI context
         self.app.router.add_get("/api/whales", self.get_whale_trades)
 
         # Trader API routes
@@ -2381,6 +2383,7 @@ class APIServer:
 
         # Research API
         self.app.router.add_get("/api/research/event/{slug}", self.research_get_event)
+        self.app.router.add_get("/api/research/kalshi/{ticker}", self.research_get_kalshi)
         self.app.router.add_post("/api/research/analyze", self.research_analyze_event)
         self.app.router.add_post("/api/research/ask", self.research_ask_question)
 
@@ -2399,6 +2402,8 @@ class APIServer:
             self.app.router.add_get('/', lambda r: web.FileResponse(static_dir / 'index.html'))
             self.app.router.add_get('/markets', lambda r: web.FileResponse(static_dir / 'markets' / 'index.html'))
             self.app.router.add_get('/markets/', lambda r: web.FileResponse(static_dir / 'markets' / 'index.html'))
+            self.app.router.add_get('/marketsdev', lambda r: web.FileResponse(static_dir / 'marketsdev' / 'index.html'))
+            self.app.router.add_get('/marketsdev/', lambda r: web.FileResponse(static_dir / 'marketsdev' / 'index.html'))
             self.app.router.add_get('/whales', lambda r: web.FileResponse(static_dir / 'whales' / 'index.html'))
             self.app.router.add_get('/whales/', lambda r: web.FileResponse(static_dir / 'whales' / 'index.html'))
             self.app.router.add_get('/arbitrage', lambda r: web.FileResponse(static_dir / 'arbitrage' / 'index.html'))
@@ -2582,6 +2587,252 @@ class APIServer:
             logger.error(f"Error fetching events: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
+    async def get_dome_events(self, request):
+        """Fetch markets from Dome API (supports Polymarket + Kalshi)"""
+        from dome_api_sdk import DomeClient
+        from dome_api_sdk.types import DomeSDKConfig, GetMarketsParams
+        import asyncio
+
+        platform = request.query.get('platform', 'polymarket').lower()
+        limit = int(request.query.get('limit', '300'))
+
+        # Validate platform
+        if platform not in ['polymarket', 'kalshi']:
+            return web.json_response({"error": f"Invalid platform: {platform}. Must be 'polymarket' or 'kalshi'"}, status=400)
+
+        try:
+            # Initialize Dome client
+            config = DomeSDKConfig(api_key=DOME_API_KEY)
+            client = DomeClient(config=config)
+
+            logger.info(f"Fetching {limit} markets from {platform} via Dome API...")
+
+            # Get the appropriate endpoint
+            endpoint = client.polymarket if platform == 'polymarket' else client.kalshi
+
+            # Fetch markets in batches (SDK is sync, use asyncio.to_thread)
+            markets = []
+            offset = 0
+            batch_size = 100
+
+            while len(markets) < limit:
+                params = GetMarketsParams(
+                    limit=min(batch_size, limit - len(markets)),
+                    offset=offset,
+                    status='open'
+                )
+
+                # Run sync SDK call in thread pool
+                response = await asyncio.to_thread(endpoint.markets.get_markets, params)
+
+                if not response or not hasattr(response, 'markets') or not response.markets:
+                    break
+
+                batch_markets = response.markets
+                markets.extend(batch_markets)
+
+                # If we got less than batch_size, we're at the end
+                if len(batch_markets) < batch_size:
+                    break
+
+                offset += batch_size
+
+            logger.info(f"Fetched {len(markets)} raw markets from {platform}")
+
+            # Debug: log first raw market structure
+            if markets and platform == 'kalshi':
+                first = markets[0]
+                if hasattr(first, '__dict__'):
+                    logger.info(f"[Kalshi Debug] Raw market fields: {list(vars(first).keys())}")
+                    # Log price-related fields
+                    for attr in ['last_price', 'yes_price', 'no_price', 'yes_bid', 'yes_ask', 'no_bid', 'no_ask', 'best_bid', 'best_ask', 'mid_price']:
+                        if hasattr(first, attr):
+                            logger.info(f"[Kalshi Debug] {attr}: {getattr(first, attr)}")
+
+            # Helper function to recursively convert objects to dicts
+            def to_dict(obj):
+                if isinstance(obj, dict):
+                    return {k: to_dict(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [to_dict(item) for item in obj]
+                elif hasattr(obj, '__dict__'):
+                    return {k: to_dict(v) for k, v in vars(obj).items()}
+                elif hasattr(obj, '_asdict'):
+                    return {k: to_dict(v) for k, v in obj._asdict().items()}
+                else:
+                    return obj
+
+            # Convert to dict for JSON serialization
+            markets_dict = []
+            for market in markets:
+                # Deep convert to dict
+                market_dict = to_dict(market)
+
+                # Filter out up/down markets for Polymarket
+                if platform == 'polymarket':
+                    market_slug = market_dict.get('market_slug', '')
+                    if self.is_updown_market({'slug': market_slug}):
+                        continue
+
+                # Normalize Kalshi field names for frontend compatibility
+                if platform == 'kalshi':
+                    # Ticker fields - ensure market_ticker is primary
+                    market_ticker = market_dict.get('market_ticker', '')
+                    event_ticker = market_dict.get('event_ticker', '')
+
+                    if 'ticker' not in market_dict:
+                        market_dict['ticker'] = market_ticker
+
+                    # Extract series_ticker from event_ticker (e.g., "KXBTCMAXY-25" -> "KXBTCMAXY")
+                    # Series is everything before the year suffix (last dash + 2 digits)
+                    series_match = re.match(r'^([A-Z]+[A-Z0-9]*?)(?:-\d{2,4})?$', event_ticker, re.IGNORECASE)
+                    if series_match:
+                        market_dict['series_ticker'] = series_match.group(1).upper()
+                    else:
+                        # Fallback: take first part before any dash, try event_ticker first then market_ticker
+                        fallback_ticker = event_ticker or market_ticker
+                        market_dict['series_ticker'] = fallback_ticker.split('-')[0].upper() if fallback_ticker else ''
+
+                    # Generate correct Kalshi URL using series_ticker
+                    series_lower = market_dict['series_ticker'].lower()
+                    if series_lower:
+                        market_dict['url'] = f"https://kalshi.com/markets/{series_lower}"
+                    else:
+                        # Last resort: use full market_ticker or event_ticker for the URL
+                        fallback = (market_ticker or event_ticker or '').lower()
+                        market_dict['url'] = f"https://kalshi.com/markets/{fallback}" if fallback else ''
+
+                    # Volume - Dome returns in cents
+                    if 'volume' not in market_dict:
+                        market_dict['volume'] = market_dict.get('total_volume', 0)
+
+                    # Price - use last_price directly (0-100 cents from Dome)
+                    # Frontend will convert: price / 100 to get 0-1 range
+                    if 'yes_price' not in market_dict:
+                        market_dict['yes_price'] = market_dict.get('last_price', 0)
+
+                    # Status normalization
+                    if 'status' not in market_dict:
+                        market_dict['status'] = 'open'
+
+                    # Timestamp fields - ensure Unix seconds format
+                    for ts_field in ['close_time', 'end_time', 'start_time', 'open_time', 'expiration_time']:
+                        if ts_field in market_dict and market_dict[ts_field]:
+                            val = market_dict[ts_field]
+                            # If it looks like milliseconds, convert to seconds
+                            if isinstance(val, (int, float)) and val > 10000000000:
+                                market_dict[ts_field] = int(val / 1000)
+
+                markets_dict.append(market_dict)
+
+            # Enrich Kalshi markets with real bid/ask prices from direct Kalshi API
+            if platform == 'kalshi' and markets_dict:
+                try:
+                    markets_dict = await self._enrich_kalshi_prices(markets_dict)
+                except Exception as e:
+                    logger.warning(f"[Kalshi] Price enrichment failed: {e}, using Dome prices")
+
+            logger.info(f"Returning {len(markets_dict)} filtered markets from {platform}")
+            return web.json_response(markets_dict[:limit])
+
+        except Exception as e:
+            logger.error(f"Error fetching from Dome API ({platform}): {e}")
+            import traceback
+            traceback.print_exc()
+            return web.json_response({"error": str(e), "platform": platform}, status=500)
+
+    async def _enrich_kalshi_prices(self, markets: list) -> list:
+        """Enrich Dome market data with real bid/ask prices from Kalshi public API.
+
+        Kalshi API provides yes_bid, yes_ask which gives accurate mid-market price,
+        while Dome only provides last_price (last trade, often stale).
+
+        Uses direct ticker lookup: GET /markets/{ticker}
+        """
+        import aiohttp
+        import asyncio
+
+        KALSHI_API = "https://api.elections.kalshi.com/trade-api/v2/markets"
+
+        # Collect tickers to fetch
+        tickers = []
+        for m in markets:
+            ticker = m.get('market_ticker') or m.get('ticker', '')
+            if ticker:
+                tickers.append(ticker)
+
+        if not tickers:
+            return markets
+
+        # Fetch prices in parallel (batch of 20 concurrent requests)
+        async def fetch_price(session, ticker):
+            try:
+                url = f"{KALSHI_API}/{ticker}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        market_data = data.get('market', {})
+                        yes_bid = market_data.get('yes_bid', 0)
+                        yes_ask = market_data.get('yes_ask', 0)
+
+                        # Calculate mid-market price
+                        # Only use mid if both bid and ask exist (real liquidity)
+                        if yes_bid > 0 and yes_ask > 0 and yes_ask < 100:
+                            mid_price = (yes_bid + yes_ask) / 2
+                        elif yes_bid > 0 and yes_ask == 0:
+                            # Only bids, use bid
+                            mid_price = yes_bid
+                        elif yes_ask > 0 and yes_ask < 100 and yes_bid == 0:
+                            # Only asks below 100, use ask
+                            mid_price = yes_ask
+                        else:
+                            # No real liquidity or ask=100 (no sellers), use last_price
+                            mid_price = market_data.get('last_price', 0)
+
+                        return ticker, {
+                            'yes_bid': yes_bid,
+                            'yes_ask': yes_ask,
+                            'mid_price': mid_price
+                        }
+            except Exception as e:
+                pass  # Silently skip failed fetches
+            return ticker, None
+
+        try:
+            kalshi_prices = {}
+            async with aiohttp.ClientSession() as session:
+                # Process in batches of 20 to avoid overwhelming the API
+                batch_size = 20
+                for i in range(0, len(tickers), batch_size):
+                    batch = tickers[i:i + batch_size]
+                    tasks = [fetch_price(session, t) for t in batch]
+                    results = await asyncio.gather(*tasks)
+
+                    for ticker, price_data in results:
+                        if price_data:
+                            kalshi_prices[ticker] = price_data
+
+            # Enrich Dome data with Kalshi prices
+            enriched = 0
+            for m in markets:
+                ticker = m.get('market_ticker') or m.get('ticker', '')
+                if ticker in kalshi_prices:
+                    price_data = kalshi_prices[ticker]
+                    m['yes_price'] = price_data['mid_price']
+                    m['yes_bid'] = price_data['yes_bid']
+                    m['yes_ask'] = price_data['yes_ask']
+                    m['price_source'] = 'kalshi_api'
+                    enriched += 1
+                else:
+                    m['price_source'] = 'dome_last_price'
+
+            logger.info(f"[Kalshi] Enriched {enriched}/{len(markets)} markets with real prices")
+            return markets
+
+        except Exception as e:
+            logger.warning(f"[Kalshi] Price enrichment error: {e}")
+            return markets
+
     async def get_new_markets(self, request):
         """Get recently posted new markets (same as Telegram channel)"""
         posted_events_file = Path("posted_events.json")
@@ -2717,69 +2968,280 @@ class APIServer:
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
     async def get_market_context(self, request):
-        """Get AI-generated Market Context from Polymarket API"""
+        """Get AI-generated research context for Polymarket markets.
+
+        Pipeline (same as Kalshi):
+        1. FactsAI - real internet research with sources
+        2. Xiaomi/mimo - summarize into clean 2-3 paragraph format
+        """
         import aiohttp
-        import ssl
 
         slug = request.query.get('slug', '')
-        if not slug:
-            return web.json_response({"success": False, "error": "No slug provided"}, status=400)
+        title = request.query.get('title', '')
 
-        # Use the Grok event-summary API (same as bot.py)
-        url = f"https://polymarket.com/api/grok/event-summary?prompt={slug}"
+        if not slug and not title:
+            return web.json_response({"success": False, "error": "No slug or title provided"}, status=400)
 
-        # SSL context that doesn't verify certificates (fixes Windows SSL issues)
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        # If we have slug but no title, try to get title from the slug
+        search_term = title if title else slug.replace('-', ' ')
+
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 
         try:
             timeout = aiohttp.ClientTimeout(total=120)
-            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
 
-            async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-                logger.info(f"Fetching Market Context for: {slug}")
-                async with session.post(
-                    url,
-                    headers={
-                        'Content-Type': 'application/json',
-                        'Accept': '*/*',
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Authorization': f'Bearer {POLYMARKET_BUILDERS_KEY}'
-                    }
-                ) as response:
-                    logger.info(f"Market Context API status: {response.status}")
-                    if response.status == 200:
-                        text = await response.text()
-                        # Remove sources block if present
-                        if '__SOURCES__' in text:
-                            text = text.split('__SOURCES__')[0].strip()
-                        if text and len(text) > 50:
-                            return web.json_response({
-                                "success": True,
-                                "context": text
-                            })
+                # Step 1: Get real research from FactsAI
+                facts_research = ""
+                if FACTSAI_API_KEY:
+                    try:
+                        logger.info(f"[Polymarket] Fetching FactsAI research for: {search_term[:50]}...")
+                        facts_headers = {
+                            "Authorization": f"Bearer {FACTSAI_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
+                        facts_data = {
+                            "query": f"Latest news, developments and analysis about: {search_term}. Include recent events, key dates, and factors affecting probability.",
+                            "text": True
+                        }
+
+                        async with session.post(
+                            FACTSAI_API_URL,
+                            headers=facts_headers,
+                            json=facts_data,
+                            timeout=aiohttp.ClientTimeout(total=60)
+                        ) as facts_resp:
+                            if facts_resp.status == 200:
+                                facts_result = await facts_resp.json()
+                                if facts_result.get("success") and facts_result.get("data"):
+                                    facts_research = facts_result["data"].get("answer", "") or facts_result["data"].get("text", "")
+                                    if isinstance(facts_research, dict):
+                                        facts_research = facts_research.get("text", str(facts_research))
+                                    logger.info(f"[Polymarket] Got FactsAI research: {len(facts_research)} chars")
+                            else:
+                                logger.warning(f"[Polymarket] FactsAI returned {facts_resp.status}")
+                    except Exception as e:
+                        logger.warning(f"[Polymarket] FactsAI error: {e}")
+                else:
+                    logger.warning("[Polymarket] FACTSAI_API_KEY not configured, skipping research")
+
+                # Step 2: If we have research, summarize with Xiaomi. Otherwise return research directly.
+                if facts_research and OPENROUTER_API_KEY:
+                    # Summarize the research into Polymarket-style format (2-3 paragraphs)
+                    summary_prompt = f"""Based on this research about a prediction market, write a comprehensive summary in 2-3 paragraphs.
+
+MARKET: {search_term}
+
+RESEARCH DATA:
+{facts_research[:4000]}
+
+FORMAT (follow this style exactly):
+
+Paragraph 1: Start with "In the past week..." or similar timeframe. Cover the most important recent news, events, and developments. Include specific dates (e.g., "January 9"), names, and what happened.
+
+Paragraph 2: Discuss how these events affect the market probabilities. Mention specific percentages if available. Reference sources like news outlets, social media posts, or analyst opinions.
+
+Paragraph 3 (optional): Add any additional context about upcoming events, key dates, or factors that could shift the probability.
+
+RULES:
+- Plain text only, NO markdown formatting
+- NO bullets, dashes, headers, or sections
+- Write flowing paragraphs like a news article
+- Include specific facts, dates, percentages from the research
+- Mention sources when available (e.g., "according to Bloomberg", "posts on X indicate")
+- Total length: 150-250 words"""
+
+                    logger.info(f"[Polymarket] Summarizing with Xiaomi...")
+                    async with session.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                            "HTTP-Referer": "https://polydictions.com",
+                            "X-Title": "Polydictions"
+                        },
+                        json={
+                            "model": "xiaomi/mimo-v2-flash:free",
+                            "messages": [{"role": "user", "content": summary_prompt}]
+                        }
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            message = data.get('choices', [{}])[0].get('message', {})
+                            context = message.get('content', '')
+
+                            if context:
+                                return web.json_response({
+                                    "success": True,
+                                    "context": context,
+                                    "source": "factsai+xiaomi",
+                                    "research_length": len(facts_research)
+                                })
                         else:
-                            return web.json_response({
-                                "success": False,
-                                "error": "Response too short or empty"
-                            }, status=500)
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"Market Context API error: {response.status} - {error_text}")
-                        return web.json_response({
-                            "success": False,
-                            "error": f"API returned status {response.status}"
-                        }, status=response.status)
+                            logger.warning(f"[Polymarket] Xiaomi returned {response.status}, using raw research")
+
+                # Fallback: return raw FactsAI research if summarization failed
+                if facts_research:
+                    # Clean up and truncate if needed
+                    clean_research = facts_research[:800].strip()
+                    if len(facts_research) > 800:
+                        clean_research += "..."
+                    return web.json_response({
+                        "success": True,
+                        "context": clean_research,
+                        "source": "factsai"
+                    })
+
+                # No research available
+                return web.json_response({
+                    "success": False,
+                    "error": "No research data available. Check FACTSAI_API_KEY configuration."
+                }, status=500)
 
         except asyncio.TimeoutError:
-            logger.error(f"Market Context request timed out for {slug}")
             return web.json_response({
                 "success": False,
-                "error": "Request timed out (may take up to 2 minutes)"
+                "error": "Request timed out"
             }, status=504)
         except Exception as e:
-            logger.error(f"Error fetching Market Context: {e}")
+            logger.error(f"Error fetching Polymarket context: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def get_kalshi_context(self, request):
+        """Get AI-generated research context for Kalshi markets.
+
+        Pipeline:
+        1. FactsAI - real internet research with sources
+        2. Xiaomi/mimo - summarize into clean 2-3 sentence format
+        """
+        import aiohttp
+
+        title = request.query.get('title', '')
+        ticker = request.query.get('ticker', '')
+
+        if not title:
+            return web.json_response({"success": False, "error": "No market title provided"}, status=400)
+
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=120)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+
+                # Step 1: Get real research from FactsAI
+                facts_research = ""
+                if FACTSAI_API_KEY:
+                    try:
+                        logger.info(f"[Kalshi] Fetching FactsAI research for: {title[:50]}...")
+                        facts_headers = {
+                            "Authorization": f"Bearer {FACTSAI_API_KEY}",
+                            "Content-Type": "application/json"
+                        }
+                        facts_data = {
+                            "query": f"Latest news, developments and analysis about: {title}. Include recent events, key dates, and factors affecting probability.",
+                            "text": True
+                        }
+
+                        async with session.post(
+                            FACTSAI_API_URL,
+                            headers=facts_headers,
+                            json=facts_data,
+                            timeout=aiohttp.ClientTimeout(total=60)
+                        ) as facts_resp:
+                            if facts_resp.status == 200:
+                                facts_result = await facts_resp.json()
+                                if facts_result.get("success") and facts_result.get("data"):
+                                    facts_research = facts_result["data"].get("answer", "") or facts_result["data"].get("text", "")
+                                    if isinstance(facts_research, dict):
+                                        facts_research = facts_research.get("text", str(facts_research))
+                                    logger.info(f"[Kalshi] Got FactsAI research: {len(facts_research)} chars")
+                            else:
+                                logger.warning(f"[Kalshi] FactsAI returned {facts_resp.status}")
+                    except Exception as e:
+                        logger.warning(f"[Kalshi] FactsAI error: {e}")
+                else:
+                    logger.warning("[Kalshi] FACTSAI_API_KEY not configured, skipping research")
+
+                # Step 2: If we have research, summarize with Xiaomi. Otherwise return research directly.
+                if facts_research and OPENROUTER_API_KEY:
+                    # Summarize the research into Polymarket-style format (2-3 paragraphs)
+                    summary_prompt = f"""Based on this research about a prediction market, write a comprehensive summary in 2-3 paragraphs.
+
+MARKET: {title}
+
+RESEARCH DATA:
+{facts_research[:4000]}
+
+FORMAT (follow this style exactly):
+
+Paragraph 1: Start with "In the past week..." or similar timeframe. Cover the most important recent news, events, and developments. Include specific dates (e.g., "January 9"), names, and what happened.
+
+Paragraph 2: Discuss how these events affect the market probabilities. Mention specific percentages if available. Reference sources like news outlets, social media posts, or analyst opinions.
+
+Paragraph 3 (optional): Add any additional context about upcoming events, key dates, or factors that could shift the probability.
+
+RULES:
+- Plain text only, NO markdown formatting
+- NO bullets, dashes, headers, or sections
+- Write flowing paragraphs like a news article
+- Include specific facts, dates, percentages from the research
+- Mention sources when available (e.g., "according to Bloomberg", "posts on X indicate")
+- Total length: 150-250 words"""
+
+                    logger.info(f"[Kalshi] Summarizing with Xiaomi...")
+                    async with session.post(
+                        "https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                            "HTTP-Referer": "https://polydictions.com",
+                            "X-Title": "Polydictions"
+                        },
+                        json={
+                            "model": "xiaomi/mimo-v2-flash:free",
+                            "messages": [{"role": "user", "content": summary_prompt}]
+                        }
+                    ) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            message = data.get('choices', [{}])[0].get('message', {})
+                            context = message.get('content', '')
+
+                            if context:
+                                return web.json_response({
+                                    "success": True,
+                                    "context": context,
+                                    "source": "factsai+xiaomi",
+                                    "research_length": len(facts_research)
+                                })
+                        else:
+                            logger.warning(f"[Kalshi] Xiaomi returned {response.status}, using raw research")
+
+                # Fallback: return raw FactsAI research if summarization failed
+                if facts_research:
+                    # Clean up and truncate if needed
+                    clean_research = facts_research[:800].strip()
+                    if len(facts_research) > 800:
+                        clean_research += "..."
+                    return web.json_response({
+                        "success": True,
+                        "context": clean_research,
+                        "source": "factsai"
+                    })
+
+                # No research available
+                return web.json_response({
+                    "success": False,
+                    "error": "No research data available. Check FACTSAI_API_KEY configuration."
+                }, status=500)
+
+        except asyncio.TimeoutError:
+            return web.json_response({
+                "success": False,
+                "error": "Request timed out"
+            }, status=504)
+        except Exception as e:
+            logger.error(f"Error fetching Kalshi context: {e}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
     async def _fetch_user_trade_count(self, user_address, session):
@@ -4799,14 +5261,16 @@ class APIServer:
     # ==================== Research API ====================
 
     async def research_get_event(self, request):
-        """Fetch and analyze a Polymarket event by slug"""
+        """Fetch and analyze a Polymarket event by slug using Xiaomi AI"""
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+
         try:
             slug = request.match_info.get('slug', '')
             if not slug:
                 return web.json_response({"error": "Missing event slug"}, status=400)
 
-            # Fetch event from Polymarket API (server-side to avoid CORS)
             async with aiohttp.ClientSession() as session:
+                # Fetch event from Polymarket API
                 async with session.get(
                     f"https://gamma-api.polymarket.com/events?slug={slug}",
                     timeout=aiohttp.ClientTimeout(total=15)
@@ -4820,60 +5284,359 @@ class APIServer:
 
                     event = events[0]
 
-            # Generate AI analysis
-            markets = event.get("markets", [])
-            total_volume = sum(float(m.get("volume", 0)) for m in markets)
-            total_liquidity = sum(float(m.get("liquidity", 0)) for m in markets)
+                # Prepare market data
+                markets = event.get("markets", [])
+                total_volume = sum(float(m.get("volume", 0)) for m in markets)
+                total_liquidity = sum(float(m.get("liquidity", 0)) for m in markets)
+                title = event.get('title', 'Unknown')
 
-            market_details = []
-            for m in markets[:5]:
-                outcomes = m.get("outcomes", "[]")
-                prices = m.get("outcomePrices", "[]")
-                if isinstance(outcomes, str):
-                    outcomes = json.loads(outcomes)
-                if isinstance(prices, str):
-                    prices = json.loads(prices)
+                market_details = []
+                for m in markets[:5]:
+                    outcomes = m.get("outcomes", "[]")
+                    prices = m.get("outcomePrices", "[]")
+                    if isinstance(outcomes, str):
+                        outcomes = json.loads(outcomes)
+                    if isinstance(prices, str):
+                        prices = json.loads(prices)
 
-                market_details.append({
-                    "question": m.get("question", m.get("groupItemTitle", "")),
-                    "outcomes": outcomes,
-                    "prices": [float(p) * 100 for p in prices] if prices else [],
-                    "volume": float(m.get("volume", 0)),
-                    "liquidity": float(m.get("liquidity", 0))
-                })
+                    market_details.append({
+                        "question": m.get("question", m.get("groupItemTitle", "")),
+                        "outcomes": outcomes,
+                        "prices": [float(p) * 100 for p in prices] if prices else [],
+                        "volume": float(m.get("volume", 0)),
+                        "liquidity": float(m.get("liquidity", 0))
+                    })
 
-            prompt = f"""Analyze this prediction market event and provide insights:
+                # Get research from FactsAI
+                facts_research = ""
+                if FACTSAI_API_KEY:
+                    try:
+                        logger.info(f"[Polymarket Research] Fetching FactsAI for: {title[:50]}...")
+                        async with session.post(
+                            FACTSAI_API_URL,
+                            headers={
+                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "query": f"Latest news and analysis about: {title}. Include recent events and probability factors.",
+                                "text": True
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                if result.get("success") and result.get("data"):
+                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
+                                    if isinstance(facts_research, dict):
+                                        facts_research = facts_research.get("text", str(facts_research))
+                                    logger.info(f"[Polymarket Research] Got FactsAI: {len(facts_research)} chars")
+                    except Exception as e:
+                        logger.warning(f"[Polymarket Research] FactsAI error: {e}")
 
-Event: {event.get('title', 'Unknown')}
-Description: {event.get('description', 'No description')[:500]}
+                # Generate analysis with Xiaomi
+                analysis = None
+                if OPENROUTER_API_KEY:
+                    from datetime import datetime as dt
+                    prompt = f"""You are polydictions research assistant analyzing a Polymarket event.
 
-Markets:
+Current date: {dt.now().strftime('%B %d, %Y')}
+
+EVENT: {title}
+DESCRIPTION: {event.get('description', 'No description')[:500]}
+
+MARKETS:
 {json.dumps(market_details, indent=2)}
 
 Total Volume: ${total_volume:,.0f}
 Total Liquidity: ${total_liquidity:,.0f}
 
-Provide a brief analysis (2-3 paragraphs) covering:
-1. Current market sentiment based on prices
-2. Key factors that could move these markets
-3. Any potential opportunities or risks for traders
+{f"RESEARCH DATA:{chr(10)}{facts_research[:2500]}" if facts_research else ""}
 
-Be concise and actionable. Use lowercase. Don't use markdown headers."""
+Provide analysis in 2-3 paragraphs:
+- Current market sentiment based on prices
+- Key factors that could move these markets
+- Any opportunities or risks for traders
 
-            analysis = await AIAnalyzer.generate_analysis(prompt)
+Use lowercase. Be concise and actionable. No markdown headers."""
 
-            return web.json_response({
-                "success": True,
-                "event": event,
-                "analysis": analysis or "Unable to generate analysis at this time."
-            })
+                    try:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "HTTP-Referer": "https://polydictions.com",
+                                "X-Title": "Polydictions"
+                            },
+                            json={
+                                "model": "xiaomi/mimo-v2-flash:free",
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": 500
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                analysis = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                                logger.info(f"[Polymarket Research] Analysis: {len(analysis)} chars")
+                    except Exception as e:
+                        logger.error(f"[Polymarket Research] Xiaomi error: {e}")
+
+                return web.json_response({
+                    "success": True,
+                    "event": event,
+                    "analysis": analysis.strip() if analysis else "analysis unavailable"
+                })
 
         except Exception as e:
             logger.error(f"research_get_event error: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
+    async def research_get_kalshi(self, request):
+        """Fetch and analyze a Kalshi market by ticker using Firecrawl scraping + Xiaomi AI"""
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+        FIRECRAWL_API_KEY = os.getenv('FIRECRAWL_API_KEY', '')
+
+        try:
+            ticker = request.match_info.get('ticker', '').upper()
+            if not ticker:
+                return web.json_response({"error": "Missing market ticker"}, status=400)
+
+            # Extract URL path from ticker
+            # Ticker format: KXNFLGAME-26JAN10LACAR
+            # URL format: kalshi.com/markets/kxnflgame/.../kxnflgame-26jan10lacar
+            series_ticker = ticker.split('-')[0].lower() if '-' in ticker else ticker.lower()
+            ticker_lower = ticker.lower()
+
+            async with aiohttp.ClientSession() as session:
+                market_data = None
+
+                # Method 1: Try Firecrawl to scrape Kalshi page directly
+                if FIRECRAWL_API_KEY and not market_data:
+                    try:
+                        kalshi_url = f"https://kalshi.com/markets/{series_ticker}"
+                        logger.info(f"[Kalshi Research] Scraping {kalshi_url} via Firecrawl...")
+
+                        async with session.post(
+                            "https://api.firecrawl.dev/v1/scrape",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {FIRECRAWL_API_KEY}"
+                            },
+                            json={
+                                "url": kalshi_url,
+                                "formats": ["markdown"],
+                                "onlyMainContent": True,
+                                "waitFor": 2000
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get("success") and data.get("data"):
+                                    markdown = data["data"].get("markdown", "")
+                                    metadata = data["data"].get("metadata", {})
+
+                                    # Parse market data from scraped content
+                                    title = metadata.get("title", "").replace(" | Kalshi", "").strip()
+
+                                    # Extract prices from markdown (look for patterns like "82%" or "Yes 83¢")
+                                    import re
+                                    yes_match = re.search(r'(?:Yes|yes)\s*(?:[\$¢]?\s*)?(\d+(?:\.\d+)?)\s*[¢%]?', markdown)
+                                    no_match = re.search(r'(?:No|no)\s*(?:[\$¢]?\s*)?(\d+(?:\.\d+)?)\s*[¢%]?', markdown)
+                                    vol_match = re.search(r'\$?([\d,]+(?:\.\d+)?)\s*(?:M|K)?\s*vol', markdown, re.IGNORECASE)
+
+                                    yes_price = float(yes_match.group(1)) if yes_match else 50
+                                    # Convert cents to percentage if needed
+                                    if yes_price > 1 and yes_price <= 100:
+                                        yes_price = yes_price  # Already percentage or cents=percentage
+
+                                    volume = 0
+                                    if vol_match:
+                                        vol_str = vol_match.group(0)
+                                        vol_num = float(vol_match.group(1).replace(',', ''))
+                                        if 'M' in vol_str:
+                                            volume = vol_num * 1_000_000
+                                        elif 'K' in vol_str:
+                                            volume = vol_num * 1_000
+                                        else:
+                                            volume = vol_num
+
+                                    if title:
+                                        market_data = {
+                                            "title": title,
+                                            "market_ticker": ticker,
+                                            "event_ticker": series_ticker.upper(),
+                                            "yes_price": yes_price,
+                                            "volume": volume,
+                                            "status": "active",
+                                            "_scraped": True,
+                                            "_raw_markdown": markdown[:2000]  # Keep for analysis
+                                        }
+                                        logger.info(f"[Kalshi Research] Scraped: {title}, yes={yes_price}%, vol=${volume:,.0f}")
+                    except Exception as e:
+                        logger.warning(f"[Kalshi Research] Firecrawl scraping failed: {e}")
+
+                # Method 2: Fallback to Kalshi API
+                if not market_data:
+                    kalshi_apis = [
+                        "https://api.elections.kalshi.com/trade-api/v2",
+                        "https://demo-api.kalshi.co/trade-api/v2",
+                    ]
+
+                    for api_base in kalshi_apis:
+                        if market_data:
+                            break
+                        try:
+                            async with session.get(
+                                f"{api_base}/markets/{ticker}",
+                                timeout=aiohttp.ClientTimeout(total=10)
+                            ) as resp:
+                                if resp.status == 200:
+                                    data = await resp.json()
+                                    market_data = data.get("market", data)
+                                    logger.info(f"[Kalshi Research] Found via API: {ticker}")
+                                    break
+                        except Exception as e:
+                            pass
+
+                # Method 3: Create minimal data from ticker for FactsAI research
+                if not market_data:
+                    ticker_parts = ticker.split('-')
+                    series = ticker_parts[0] if ticker_parts else ticker
+
+                    title_map = {
+                        "KXNFLGAME": "NFL Game",
+                        "KXNBA": "NBA Game",
+                        "KXMLB": "MLB Game",
+                        "KXNHL": "NHL Game",
+                        "KXSOCCER": "Soccer Match",
+                    }
+                    base_title = title_map.get(series, series.replace("KX", "").replace("_", " ").title())
+
+                    if len(ticker_parts) > 1:
+                        date_part = ticker_parts[1][:7] if len(ticker_parts[1]) >= 7 else ticker_parts[1]
+                        market_data = {
+                            "title": f"{base_title} - {date_part}",
+                            "market_ticker": ticker,
+                            "event_ticker": series,
+                            "status": "active",
+                            "volume": 0,
+                            "_from_ticker": True
+                        }
+                        logger.info(f"[Kalshi Research] Created from ticker: {ticker}")
+                    else:
+                        return web.json_response({"error": "Market not found"}, status=404)
+
+                # Extract market info
+                title = market_data.get("title") or market_data.get("market_ticker") or ticker
+                # Check for scraped yes_price first, then API fields
+                if market_data.get("yes_price"):
+                    yes_price = market_data["yes_price"]
+                else:
+                    yes_bid = market_data.get("yes_bid", 0) or 0
+                    yes_ask = market_data.get("yes_ask", 0) or 0
+                    yes_price = (yes_bid + yes_ask) / 2 if yes_bid and yes_ask else market_data.get("last_price", 50)
+                volume = market_data.get("volume", 0) or 0
+                status = market_data.get("status", "open")
+
+                # Get research from FactsAI
+                facts_research = ""
+                if FACTSAI_API_KEY:
+                    try:
+                        logger.info(f"[Kalshi Research] Fetching FactsAI for: {title[:50]}...")
+                        async with session.post(
+                            FACTSAI_API_URL,
+                            headers={
+                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "query": f"Latest news and analysis about: {title}. Include recent events and probability factors.",
+                                "text": True
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                if result.get("success") and result.get("data"):
+                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
+                                    if isinstance(facts_research, dict):
+                                        facts_research = facts_research.get("text", str(facts_research))
+                                    logger.info(f"[Kalshi Research] Got FactsAI: {len(facts_research)} chars")
+                    except Exception as e:
+                        logger.warning(f"[Kalshi Research] FactsAI error: {e}")
+
+                # Generate analysis with Xiaomi
+                analysis = None
+                if OPENROUTER_API_KEY:
+                    from datetime import datetime as dt
+                    analysis_prompt = f"""You are polydictions research assistant analyzing a Kalshi prediction market.
+
+Current date: {dt.now().strftime('%B %d, %Y')}
+
+MARKET: {title}
+TICKER: {ticker}
+YES PRICE: {yes_price:.1f}%
+NO PRICE: {100 - yes_price:.1f}%
+VOLUME: ${volume:,.0f}
+STATUS: {status}
+
+{f"RESEARCH DATA:{chr(10)}{facts_research[:2500]}" if facts_research else ""}
+
+Provide analysis in 2-3 paragraphs:
+- What the current odds suggest
+- Key factors that could move this market
+- Any relevant news or context from research
+
+Use lowercase. Be concise and actionable."""
+
+                    try:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "HTTP-Referer": "https://polydictions.com",
+                                "X-Title": "Polydictions"
+                            },
+                            json={
+                                "model": "xiaomi/mimo-v2-flash:free",
+                                "messages": [{"role": "user", "content": analysis_prompt}],
+                                "max_tokens": 500
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                analysis = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                                logger.info(f"[Kalshi Research] Analysis: {len(analysis)} chars")
+                    except Exception as e:
+                        logger.error(f"[Kalshi Research] Xiaomi error: {e}")
+
+                return web.json_response({
+                    "success": True,
+                    "market": {
+                        "title": title,
+                        "market_ticker": market_data.get("market_ticker") or ticker,
+                        "event_ticker": market_data.get("event_ticker") or market_data.get("series_ticker") or ticker,
+                        "yes_price": yes_price,
+                        "volume": volume,
+                        "status": status,
+                        "close_time": market_data.get("close_time") or market_data.get("expiration_time")
+                    },
+                    "analysis": analysis or "analysis unavailable"
+                })
+
+        except Exception as e:
+            logger.error(f"research_get_kalshi error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
     async def research_analyze_event(self, request):
-        """Analyze a Polymarket event and provide insights"""
+        """Analyze a Polymarket event using Xiaomi AI"""
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+
         try:
             data = await request.json()
             event = data.get("event")
@@ -4881,7 +5644,6 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
             if not event:
                 return web.json_response({"error": "Missing event data"}, status=400)
 
-            # Build analysis prompt
             markets = event.get("markets", [])
             total_volume = sum(float(m.get("volume", 0)) for m in markets)
             total_liquidity = sum(float(m.get("liquidity", 0)) for m in markets)
@@ -4903,29 +5665,55 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
                     "liquidity": float(m.get("liquidity", 0))
                 })
 
-            prompt = f"""Analyze this prediction market event and provide insights:
+            analysis = None
+            if OPENROUTER_API_KEY:
+                from datetime import datetime as dt
+                prompt = f"""You are polydictions research assistant analyzing a Polymarket event.
 
-Event: {event.get('title', 'Unknown')}
-Description: {event.get('description', 'No description')[:500]}
+Current date: {dt.now().strftime('%B %d, %Y')}
 
-Markets:
+EVENT: {event.get('title', 'Unknown')}
+DESCRIPTION: {event.get('description', 'No description')[:500]}
+
+MARKETS:
 {json.dumps(market_details, indent=2)}
 
 Total Volume: ${total_volume:,.0f}
 Total Liquidity: ${total_liquidity:,.0f}
 
-Provide a brief analysis (2-3 paragraphs) covering:
-1. Current market sentiment based on prices
-2. Key factors that could move these markets
-3. Any potential opportunities or risks for traders
+Provide analysis in 2-3 paragraphs:
+- Current market sentiment based on prices
+- Key factors that could move these markets
+- Any opportunities or risks for traders
 
-Be concise and actionable. Use lowercase. Don't use markdown headers."""
+Use lowercase. Be concise and actionable. No markdown headers."""
 
-            analysis = await AIAnalyzer.generate_analysis(prompt)
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "HTTP-Referer": "https://polydictions.com",
+                                "X-Title": "Polydictions"
+                            },
+                            json={
+                                "model": "xiaomi/mimo-v2-flash:free",
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": 500
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                analysis = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                except Exception as e:
+                    logger.error(f"[Research Analyze] Xiaomi error: {e}")
 
             return web.json_response({
                 "success": True,
-                "analysis": analysis or "Unable to generate analysis at this time."
+                "analysis": analysis.strip() if analysis else "analysis unavailable"
             })
 
         except Exception as e:
@@ -4933,7 +5721,15 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
             return web.json_response({"error": str(e)}, status=500)
 
     async def research_ask_question(self, request):
-        """Answer a question about prediction markets"""
+        """Answer a question about prediction markets using Xiaomi AI.
+
+        Architecture:
+        1. Xiaomi classifies the query (general chat vs market research)
+        2. If general → Xiaomi responds directly
+        3. If market research → FactsAI research → Xiaomi final answer
+        """
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+
         try:
             data = await request.json()
             question = data.get("question", "").strip()
@@ -4941,71 +5737,136 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
             if not question:
                 return web.json_response({"error": "Missing question"}, status=400)
 
-            # Check for meta/off-topic questions that don't need market search
-            search_terms = question.lower()
-            meta_patterns = [
-                "what model", "what ai", "who are you", "what are you",
-                "what date", "what time", "what day", "what year",
-                "hello", "hi ", "hey ", "привет", "how are you",
-                "what can you do", "help me", "your name"
-            ]
+            async with aiohttp.ClientSession() as session:
+                # Step 1: Xiaomi classifies the query
+                classify_prompt = f"""You are a query classifier for a prediction markets research assistant.
 
-            is_meta_question = any(pattern in search_terms for pattern in meta_patterns)
+USER QUERY: "{question}"
 
-            if is_meta_question:
-                # Answer directly without market search
-                from datetime import datetime as dt
-                meta_answers = {
-                    "model": "i'm polydictions research assistant, powered by ai. i help analyze polymarket prediction markets.",
-                    "date": f"today is {dt.now().strftime('%B %d, %Y')}.",
-                    "time": f"current time is {dt.now().strftime('%H:%M UTC')}.",
-                    "who": "i'm polydictions research assistant. i analyze prediction markets on polymarket and help you find opportunities.",
-                    "hello": "hey! i'm here to help you analyze polymarket prediction markets. ask me about trending markets, specific events, or paste a polymarket url.",
-                    "help": "i can help you with: finding trending markets, analyzing specific events (paste polymarket url), explaining market odds, finding crypto/politics/sports markets, and more."
-                }
+Classify this query into ONE of these categories:
+- "general" - greetings, meta questions about the AI, off-topic chat, jokes, etc.
+- "market_search" - user wants to find/analyze prediction markets, asks about trends, specific topics (crypto, politics, sports, AI), or wants market recommendations
 
-                answer = None
-                if any(w in search_terms for w in ["model", "ai", "what are you"]):
-                    answer = meta_answers["model"]
-                elif any(w in search_terms for w in ["date", "day", "year"]):
-                    answer = meta_answers["date"]
-                elif "time" in search_terms:
-                    answer = meta_answers["time"]
-                elif any(w in search_terms for w in ["who are you", "your name"]):
-                    answer = meta_answers["who"]
-                elif any(w in search_terms for w in ["hello", "hi ", "hey ", "привет", "how are you"]):
-                    answer = meta_answers["hello"]
-                elif any(w in search_terms for w in ["help", "what can"]):
-                    answer = meta_answers["help"]
-                else:
-                    answer = meta_answers["hello"]
+Also extract search keywords if it's a market_search query.
 
-                return web.json_response({
-                    "success": True,
-                    "markets": [],
-                    "analysis": None,
-                    "answer": answer
-                })
+Respond in this exact JSON format only, no other text:
+{{"type": "general"}} or {{"type": "market_search", "keywords": ["keyword1", "keyword2"]}}"""
 
-            # Search for relevant markets
-            markets = []
-            analysis = None
+                classification = {"type": "general"}
 
-            # Fetch markets from Polymarket - use events endpoint for better filtering
-            try:
-                async with aiohttp.ClientSession() as session:
-                    # Build search query based on keywords
-                    search_query = ""
-                    if any(word in search_terms for word in ["trump", "biden", "election", "president", "politics"]):
-                        search_query = "election"
-                    elif any(word in search_terms for word in ["bitcoin", "btc", "eth", "crypto", "ethereum", "solana"]):
-                        search_query = "crypto"
-                    elif any(word in search_terms for word in ["nfl", "nba", "sports", "super bowl", "football"]):
-                        search_query = "sports"
-                    elif any(word in search_terms for word in ["ai", "openai", "gpt", "tech"]):
-                        search_query = "AI"
+                if OPENROUTER_API_KEY:
+                    try:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "HTTP-Referer": "https://polydictions.com",
+                                "X-Title": "Polydictions"
+                            },
+                            json={
+                                "model": "xiaomi/mimo-v2-flash:free",
+                                "messages": [{"role": "user", "content": classify_prompt}],
+                                "max_tokens": 100
+                            },
+                            timeout=aiohttp.ClientTimeout(total=15)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                content = result.get('choices', [{}])[0].get('message', {}).get('content', '{}')
+                                # Extract JSON from response
+                                try:
+                                    # Handle potential markdown code blocks
+                                    if '```' in content:
+                                        content = content.split('```')[1].replace('json', '').strip()
+                                    classification = json.loads(content)
+                                    logger.info(f"[Research] Classification: {classification}")
+                                except json.JSONDecodeError:
+                                    logger.warning(f"[Research] Failed to parse classification: {content}")
+                    except Exception as e:
+                        logger.warning(f"[Research] Classification error: {e}")
 
-                    # Get active events
+                # Step 2: Handle based on classification
+                query_type = classification.get("type", "general")
+
+                if query_type == "general":
+                    # Direct response from Xiaomi
+                    from datetime import datetime as dt
+                    chat_prompt = f"""You are polydictions research assistant - a friendly AI that helps users analyze prediction markets on Polymarket and Kalshi.
+
+Current date: {dt.now().strftime('%B %d, %Y')}
+
+User message: "{question}"
+
+Respond naturally and helpfully. If they're greeting you, greet back and briefly explain what you can do (find trending markets, analyze specific events, explain odds, etc.).
+
+Keep response concise (2-3 sentences max). Use lowercase. Be friendly but professional."""
+
+                    answer = "hey! i'm polydictions research assistant. i can help you find and analyze prediction markets. ask me about trending markets, specific topics, or paste a polymarket/kalshi url!"
+
+                    if OPENROUTER_API_KEY:
+                        try:
+                            async with session.post(
+                                "https://openrouter.ai/api/v1/chat/completions",
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                    "HTTP-Referer": "https://polydictions.com",
+                                    "X-Title": "Polydictions"
+                                },
+                                json={
+                                    "model": "xiaomi/mimo-v2-flash:free",
+                                    "messages": [{"role": "user", "content": chat_prompt}],
+                                    "max_tokens": 200
+                                },
+                                timeout=aiohttp.ClientTimeout(total=15)
+                            ) as resp:
+                                if resp.status == 200:
+                                    result = await resp.json()
+                                    answer = result.get('choices', [{}])[0].get('message', {}).get('content', answer)
+                        except Exception as e:
+                            logger.warning(f"[Research] Chat response error: {e}")
+
+                    return web.json_response({
+                        "success": True,
+                        "markets": [],
+                        "analysis": None,
+                        "answer": answer.strip().lower()
+                    })
+
+                # Step 3: Market search - get research from FactsAI
+                keywords = classification.get("keywords", [question])
+                search_term = " ".join(keywords) if keywords else question
+
+                facts_research = ""
+                if FACTSAI_API_KEY:
+                    try:
+                        logger.info(f"[Research] Fetching FactsAI for: {search_term[:50]}...")
+                        async with session.post(
+                            FACTSAI_API_URL,
+                            headers={
+                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
+                                "Content-Type": "application/json"
+                            },
+                            json={
+                                "query": f"Latest prediction market news, odds, and analysis about: {search_term}. Include Polymarket and Kalshi markets if relevant.",
+                                "text": True
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                if result.get("success") and result.get("data"):
+                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
+                                    if isinstance(facts_research, dict):
+                                        facts_research = facts_research.get("text", str(facts_research))
+                                    logger.info(f"[Research] Got FactsAI: {len(facts_research)} chars")
+                    except Exception as e:
+                        logger.warning(f"[Research] FactsAI error: {e}")
+
+                # Step 4: Fetch markets from Polymarket
+                markets = []
+                try:
                     params = {
                         "limit": 20,
                         "active": "true",
@@ -5021,20 +5882,15 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
                     ) as resp:
                         if resp.status == 200:
                             all_events = await resp.json()
-
-                            # Filter: only events with active markets, not ended
-                            from datetime import datetime
                             now = datetime.now(timezone.utc)
+                            search_lower = search_term.lower()
 
                             filtered_markets = []
                             for event in all_events:
-                                event_markets = event.get("markets", [])
-                                for m in event_markets:
-                                    # Skip if closed or resolved
+                                for m in event.get("markets", []):
                                     if m.get("closed") or m.get("resolved"):
                                         continue
 
-                                    # Check end date - skip if already ended
                                     end_date = m.get("endDate")
                                     if end_date:
                                         try:
@@ -5044,14 +5900,12 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
                                         except:
                                             pass
 
-                                    # Filter by search query if specified
-                                    question_text = (m.get("question", "") + " " + event.get("title", "")).lower()
-                                    if search_query and search_query.lower() not in question_text:
-                                        continue
+                                    # Score relevance to search
+                                    text = (m.get("question", "") + " " + event.get("title", "")).lower()
+                                    if any(kw.lower() in text for kw in keywords):
+                                        filtered_markets.append(m)
 
-                                    filtered_markets.append(m)
-
-                            # Sort by volume
+                            # Sort by volume, take top 10
                             sorted_markets = sorted(
                                 filtered_markets,
                                 key=lambda x: float(x.get("volume", 0)),
@@ -5074,45 +5928,73 @@ Be concise and actionable. Use lowercase. Don't use markdown headers."""
                                     "liquidity": float(m.get("liquidity", 0)),
                                     "endDate": m.get("endDate")
                                 })
+                except Exception as e:
+                    logger.error(f"[Research] Failed to fetch markets: {e}")
 
-            except Exception as e:
-                logger.error(f"Failed to fetch markets: {e}")
+                # Step 5: Xiaomi generates final answer
+                from datetime import datetime as dt
+                market_context = ""
+                if markets:
+                    market_summary = []
+                    for m in markets[:5]:
+                        outcomes = m.get("outcomes", [])
+                        prices = m.get("prices", [])
+                        if outcomes and prices:
+                            odds_str = ", ".join([f"{o}: {float(p)*100:.0f}%" for o, p in zip(outcomes[:3], prices[:3])])
+                        else:
+                            odds_str = "n/a"
+                        market_summary.append(f"- {m['question']} | {odds_str} | vol: ${m['volume']:,.0f}")
+                    market_context = "\n\nRELEVANT POLYMARKET MARKETS:\n" + "\n".join(market_summary)
 
-            # Generate AI response
-            market_context = ""
-            if markets:
-                # Format market data for AI
-                market_summary = []
-                for m in markets[:5]:
-                    outcomes = m.get("outcomes", [])
-                    prices = m.get("prices", [])
-                    if outcomes and prices:
-                        odds_str = ", ".join([f"{o}: {float(p)*100:.0f}%" for o, p in zip(outcomes[:3], prices[:3])])
-                    else:
-                        odds_str = "n/a"
-                    market_summary.append(f"- {m['question']} | {odds_str} | vol: ${m['volume']:,.0f}")
-                market_context = f"\n\nACTIVE MARKETS (not closed, not resolved):\n" + "\n".join(market_summary)
+                final_prompt = f"""You are polydictions research assistant analyzing prediction markets.
 
-            prompt = f"""Today is January 2026. User question about Polymarket prediction markets: {question}
+Current date: {dt.now().strftime('%B %d, %Y')}
+
+USER QUESTION: {question}
+
+{f"RESEARCH DATA:{chr(10)}{facts_research[:3000]}" if facts_research else ""}
 {market_context}
 
-IMPORTANT: Only discuss the markets shown above. These are ACTIVE, OPEN markets. Do not mention any closed/resolved markets.
+Provide a helpful, informative response:
+- Answer the user's question directly
+- Reference specific markets and odds when available
+- Include relevant news/context from research data
+- Mention what the odds suggest about probability
 
-Provide a helpful answer:
-- Directly answer the question using the market data above
-- Mention specific odds and volumes
-- Give brief insight on what the odds suggest
+Format: 2-3 short paragraphs. Use lowercase. Be concise and actionable.
+If no relevant markets found, explain what you know from research and suggest related topics to explore."""
 
-Be concise (2-3 paragraphs). Use lowercase. Focus on the actual markets shown."""
+                analysis = None
+                if OPENROUTER_API_KEY:
+                    try:
+                        async with session.post(
+                            "https://openrouter.ai/api/v1/chat/completions",
+                            headers={
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                                "HTTP-Referer": "https://polydictions.com",
+                                "X-Title": "Polydictions"
+                            },
+                            json={
+                                "model": "xiaomi/mimo-v2-flash:free",
+                                "messages": [{"role": "user", "content": final_prompt}],
+                                "max_tokens": 600
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30)
+                        ) as resp:
+                            if resp.status == 200:
+                                result = await resp.json()
+                                analysis = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+                                logger.info(f"[Research] Final answer: {len(analysis)} chars")
+                    except Exception as e:
+                        logger.error(f"[Research] Final answer error: {e}")
 
-            analysis = await AIAnalyzer.generate_analysis(prompt)
-
-            return web.json_response({
-                "success": True,
-                "markets": markets[:5] if markets else [],
-                "analysis": analysis,
-                "answer": analysis if not markets else None
-            })
+                return web.json_response({
+                    "success": True,
+                    "markets": markets[:5] if markets else [],
+                    "analysis": analysis.strip() if analysis else "couldn't generate analysis. please try again.",
+                    "answer": analysis.strip() if analysis and not markets else None
+                })
 
         except Exception as e:
             logger.error(f"research_ask_question error: {e}")

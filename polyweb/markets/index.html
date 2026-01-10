@@ -10,14 +10,15 @@
     <link rel="stylesheet" href="/css/app.css">
     <link rel="icon" type="image/png" href="/images/1.png">
     <style>
-        /* Context Modal */
+        /* Context Modal - Polydictions Style */
         .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
             z-index: 1000;
             display: none;
             align-items: center;
@@ -30,66 +31,305 @@
         }
 
         .modal {
-            background: white;
+            background: var(--primary);
             border-radius: 24px;
-            max-width: 600px;
+            max-width: 480px;
             width: 100%;
-            max-height: 80vh;
+            max-height: 85vh;
             overflow-y: auto;
-            padding: 32px;
+            padding: 0;
             position: relative;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-header {
+            padding: 24px 24px 16px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+
+        .modal-platform-logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            object-fit: cover;
+            flex-shrink: 0;
+        }
+
+        .modal-header-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .modal-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: white;
+            line-height: 1.3;
+            margin: 0;
+        }
+
+        .modal-category {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--primary);
+            background: rgba(255,255,255,0.9);
+            padding: 3px 10px;
+            border-radius: 12px;
+            margin-top: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .modal-close {
             position: absolute;
             top: 16px;
             right: 16px;
-            background: none;
+            background: rgba(255, 255, 255, 0.15);
             border: none;
-            font-size: 24px;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            font-size: 16px;
             cursor: pointer;
-            color: var(--text-muted);
+            color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
         }
 
         .modal-close:hover {
-            color: var(--text-dark);
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
         }
 
-        .modal-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            color: var(--text-dark);
-            padding-right: 40px;
-        }
-
-        .modal-content {
-            color: var(--text-dark);
-            line-height: 1.6;
+        .modal-body {
+            padding: 0 24px 24px;
         }
 
         .modal-loading {
             text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.7);
         }
 
-        .context-btn {
-            padding: 8px 14px;
-            background: var(--primary);
+        .modal-loading .spinner {
+            margin: 0 auto 12px;
+        }
+
+        /* Stats Grid - Liquid Glass */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 100%);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 14px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+
+        .stat-card.highlight {
+            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.88) 100%);
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card.highlight .stat-label {
+            color: var(--primary);
+            opacity: 0.7;
+        }
+
+        .stat-card.highlight .stat-value {
+            color: var(--primary);
+        }
+
+        .stat-card.highlight .stat-sub {
             color: white;
-            border: none;
-            border-radius: 20px;
+            background: var(--primary);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 4px;
+        }
+
+        .stat-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .stat-value.green { color: #4ade80; }
+
+        .stat-sub {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 2px;
+        }
+
+        /* Info Rows - Liquid Glass */
+        .info-section {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 100%);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+
+        .info-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 10px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .info-value {
             font-size: 12px;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            align-self: flex-start;
+            color: white;
         }
 
-        .context-btn:hover {
-            background: #e55a1a;
-            transform: scale(1.02);
+        .info-value code {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+        }
+
+        /* AI Context Section - Liquid Glass */
+        .ai-section {
+            background: linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.1) 100%);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 14px;
+            padding: 12px;
+            margin-bottom: 14px;
+        }
+
+        .ai-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ai-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.8);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            text-transform: lowercase;
+        }
+
+        .ai-btn {
+            padding: 12px 20px;
+            background: white;
+            color: var(--primary);
+            border: none;
+            border-radius: 24px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .ai-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        }
+
+        .ai-btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        .ai-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .ai-content {
+            font-size: 12px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.9);
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+
+        .ai-placeholder {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            display: none;
+        }
+
+        /* CTA Button - Liquid Glass White */
+        .modal-cta {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 16px 24px;
+            background: white;
+            color: var(--primary);
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 14px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            text-transform: lowercase;
+        }
+
+        .modal-cta:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-cta:active {
+            transform: scale(0.98);
+        }
+
+        .modal-cta img {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
         }
 
         /* Subtag filters */
@@ -146,18 +386,11 @@
             max-width: 300px;
         }
 
-        /* Market card with context button */
+        /* Market card buttons */
         .market-card {
             display: flex;
             flex-direction: column;
             gap: 12px;
-        }
-
-        .market-card-actions {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: auto;
         }
 
         .market-card-buttons {
@@ -166,32 +399,157 @@
             margin-top: auto;
         }
 
-        .okbet-btn {
-            padding: 8px 14px;
-            background: white;
-            color: #333;
-            border: 1px solid #ddd;
-            border-radius: 20px;
+        .context-btn {
+            padding: 10px 18px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 24px;
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(255, 107, 0, 0.3);
+        }
+
+        .context-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(255, 107, 0, 0.5);
+        }
+
+        .context-btn:active {
+            transform: scale(0.98);
+        }
+
+        .okbet-btn {
+            padding: 10px 18px;
+            background: white;
+            color: #333;
+            border: 1px solid #eee;
+            border-radius: 24px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
             display: flex;
             align-items: center;
             gap: 6px;
             text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
         .okbet-btn:hover {
-            background: #f5f5f5;
-            transform: scale(1.02);
-            border-color: #ccc;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            border-color: #ddd;
+        }
+
+        .okbet-btn:active {
+            transform: scale(0.98);
         }
 
         .okbet-btn img {
             width: 16px;
             height: 16px;
             object-fit: contain;
+        }
+
+        /* Platform selector with logos */
+        .platform-selector {
+            display: flex;
+            gap: 8px;
+        }
+
+        .platform-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-white);
+            background: linear-gradient(135deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 100%);
+            border: 1px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            transform-style: preserve-3d;
+            transition: 0.15s cubic-bezier(0.4,0,0.2,1);
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(10px);
+            cursor: pointer;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+
+        .platform-option:hover {
+            box-shadow: 0 8px 30px rgba(0,0,0,0.25), 0 0 40px rgba(251,101,30,0.3);
+        }
+
+        .platform-option.active {
+            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 50%, rgba(255,255,255,0.9) 100%);
+            border: 1px solid rgba(255,255,255,0.5);
+            text-shadow: none;
+        }
+
+        .platform-option.active .platform-option-name {
+            color: var(--primary);
+        }
+
+        .platform-option img {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            object-fit: cover;
+        }
+
+        .platform-option-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: inherit;
+        }
+
+        /* Loading state */
+        .loading-container {
+            grid-column: 1/-1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 50vh;
+            gap: 20px;
+        }
+
+        .loading-text {
+            color: var(--text-white);
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: lowercase;
+            opacity: 0.8;
+        }
+
+        /* Time remaining badge */
+        .time-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .time-badge.normal {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .time-badge.warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+        }
+
+        .time-badge.urgent {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
         }
     </style>
 </head>
@@ -200,9 +558,18 @@
     <div class="modal-overlay" id="contextModal">
         <div class="modal">
             <button class="modal-close" onclick="closeModal()">&times;</button>
-            <div class="modal-title" id="modalTitle">Market Context</div>
-            <div class="modal-content" id="modalContent">
-                <div class="modal-loading">Loading context...</div>
+            <div class="modal-header" id="modalHeader">
+                <img src="/images/polymarket.jpg" alt="Platform" class="modal-platform-logo" id="modalLogo">
+                <div class="modal-header-text">
+                    <h2 class="modal-title" id="modalTitle">Market Context</h2>
+                    <div class="modal-category" id="modalCategory">politics</div>
+                </div>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="modal-loading">
+                    <div class="spinner"></div>
+                    <div>Loading market data...</div>
+                </div>
             </div>
         </div>
     </div>
@@ -211,16 +578,17 @@
     <nav class="navbar">
         <a href="/" class="navbar-logo">polydictions</a>
         <div class="navbar-links">
-            <a href="/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">home</a>
-            <a href="/markets/" class="navbar-link active" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
-            <a href="/alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
-            <a href="/whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
-            <a href="/arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
-            <a href="/launchpad/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
-            <a href="/roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
+            <a href="/" class="navbar-link">home</a>
+            <a href="/markets/" class="navbar-link active">markets</a>
+            <a href="/alerts/" class="navbar-link">alerts</a>
+            <a href="/whales/" class="navbar-link">whales</a>
+            <a href="/arbitrage/" class="navbar-link">arbitrage</a>
+            <a href="/launchpad/" class="navbar-link">launchpad</a>
+            <a href="/roadmap/" class="navbar-link">roadmap</a>
+            <a href="/research/" class="navbar-link">research</a>
         </div>
         <div class="navbar-right">
-            <a href="https://x.com/polydictions" target="_blank" class="navbar-social" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                 </svg>
@@ -234,7 +602,22 @@
         <!-- Page Header -->
         <div class="page-header">
             <h1 class="page-title">markets</h1>
-            <p class="page-subtitle">browse and track prediction markets from polymarket</p>
+            <p class="page-subtitle" id="pageSubtitle">browse and track prediction markets across platforms</p>
+        </div>
+
+        <!-- Platform Selector -->
+        <div class="category-section">
+            <div class="category-label">select platform</div>
+            <div class="platform-selector" id="platformFilters">
+                <div class="platform-option active" data-platform="polymarket" onmouseover="this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(10px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(18px)`">
+                    <img src="/images/polymarket.jpg" alt="Polymarket">
+                    <span class="platform-option-name">Polymarket</span>
+                </div>
+                <div class="platform-option" data-platform="kalshi" onmouseover="this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(10px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(18px)`">
+                    <img src="/images/kalshi.jpg" alt="Kalshi">
+                    <span class="platform-option-name">Kalshi</span>
+                </div>
+            </div>
         </div>
 
         <!-- Sort Filters + Search -->
@@ -278,9 +661,9 @@
 
         <!-- Markets Grid -->
         <div class="grid grid-3" id="marketsGrid">
-            <div class="loading-centered" style="grid-column: 1/-1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50vh; gap: 16px;">
-                <div class="spinner"></div>
-                <div style="color: var(--text-muted-light); font-size: 14px;">loading markets... this may take a moment</div>
+            <div class="loading-container">
+                <div class="spinner" style="width: 40px; height: 40px;"></div>
+                <div class="loading-text">loading markets...</div>
             </div>
         </div>
 
@@ -302,6 +685,7 @@
         // State
         let allEvents = [];
         let filteredEvents = [];
+        let currentPlatform = 'polymarket';
         let currentCategory = 'all';
         let currentSubtag = 'all';
         let currentSort = 'volume';
@@ -309,15 +693,239 @@
         let displayCount = 24;
         let isLoadingMore = false;
 
-        // Subtags mapping (same as alerts)
+        // Platform config
+        const PLATFORMS = {
+            polymarket: {
+                name: 'Polymarket',
+                logo: '/images/polymarket.jpg',
+                baseUrl: 'https://polymarket.com/event/',
+                color: '#6366f1'
+            },
+            kalshi: {
+                name: 'Kalshi',
+                logo: '/images/kalshi.jpg',
+                baseUrl: 'https://kalshi.com/markets/',
+                color: '#1a1a2e'
+            }
+        };
+
+        // Normalize market data from Dome API to unified format
+        function normalizeMarket(raw, platform) {
+            if (platform === 'kalshi') {
+                // Kalshi market structure from Dome API (normalized by backend)
+                // Fields: market_ticker, event_ticker, series_ticker (computed), url (computed),
+                // title, status, volume (dollars), yes_price (0-100), volume_24h, close_time, etc.
+
+                const ticker = raw.market_ticker || raw.ticker || '';
+                const eventTicker = raw.event_ticker || '';
+                const seriesTicker = raw.series_ticker || '';
+
+                // Volume from Dome is already in dollars (not cents!)
+                const volume = raw.volume || 0;
+                const volume24h = raw.volume_24h || 0;
+
+                // Price from backend: yes_price is 0-100 (cents), convert to 0-1 range
+                const yesPrice = raw.yes_price !== undefined ? raw.yes_price / 100 : null;
+
+                // Timestamps - Dome uses Unix seconds
+                const closeTime = raw.close_time ? new Date(raw.close_time * 1000) : null;
+                const endTime = raw.end_time ? new Date(raw.end_time * 1000) : null;
+                const startTime = raw.start_time ? new Date(raw.start_time * 1000) : null;
+
+                // Use backend-provided URL, or construct from event_ticker
+                // Kalshi URL format: https://kalshi.com/markets/{event_ticker}
+                let url = raw.url;
+                if (!url || url === 'https://kalshi.com/markets/' || url.endsWith('/markets/')) {
+                    // Use event_ticker directly (e.g., KXBTCMAXY-25 -> kxbtcmaxy-25)
+                    const tickerForUrl = eventTicker || ticker.split('-').slice(0, -1).join('-') || '';
+                    url = tickerForUrl ? `https://kalshi.com/markets/${tickerForUrl.toLowerCase()}` : 'https://kalshi.com/markets';
+                }
+
+                return {
+                    platform: 'kalshi',
+                    id: ticker,
+                    ticker: ticker,
+                    eventTicker: eventTicker,
+                    seriesTicker: seriesTicker,
+                    title: raw.title || ticker,
+                    description: raw.description || '',
+                    status: raw.status || 'open',
+                    result: raw.result,
+                    volume: volume,
+                    volume24h: volume24h,
+                    openInterest: raw.open_interest || 0,
+                    yesPrice: yesPrice,
+                    noPrice: yesPrice !== null ? 1 - yesPrice : null,
+                    closeTime: closeTime,
+                    endTime: endTime,
+                    startTime: startTime,
+                    url: url,
+                    category: getKalshiCategory(raw),
+                    raw: raw
+                };
+            } else {
+                // Polymarket structure
+                const volume = utils.getTotalVolume(raw);
+                const priceData = utils.getBestPrice(raw);
+
+                return {
+                    platform: 'polymarket',
+                    id: raw.id || raw.slug,
+                    slug: raw.slug,
+                    title: raw.title || 'Untitled',
+                    description: raw.description || '',
+                    status: raw.active ? 'open' : 'closed',
+                    volume: volume,
+                    volume24h: null,
+                    openInterest: null,
+                    yesPrice: priceData ? priceData.yes : null,
+                    noPrice: priceData ? priceData.no : null,
+                    closeTime: raw.endDate ? new Date(raw.endDate) : null,
+                    endTime: raw.endDate ? new Date(raw.endDate) : null,
+                    startTime: raw.createdAt ? new Date(raw.createdAt) : null,
+                    url: `https://polymarket.com/event/${raw.slug}`,
+                    category: utils.getCategory(raw),
+                    tags: raw.tags || [],
+                    raw: raw
+                };
+            }
+        }
+
+        // Track unknown tickers for debugging (helps identify new categories)
+        const unknownTickers = new Set();
+
+        // Kalshi category detection
+        function getKalshiCategory(market) {
+            const ticker = (market.market_ticker || market.event_ticker || '').toLowerCase();
+            const seriesTicker = (market.series_ticker || '').toLowerCase();
+            const title = (market.title || '').toLowerCase();
+
+            // Ticker prefix mapping - use series ticker for cleaner matching
+            // Based on Kalshi's actual series naming conventions
+            const tickerCategories = {
+                crypto: [
+                    'kxbtc', 'kxeth', 'kxsol', 'kxdoge', 'kxxrp', 'kxcrypto', 'kxmstr', 'kxsatoshi',
+                    'kxbtcmax', 'kxbtcmin', 'kxbtcd', 'kxbtcw', 'kxbtcm', 'kxbtcy', // BTC price variants
+                    'kxethmax', 'kxethmin', 'kxethd', 'kxethw', 'kxethm', // ETH price variants
+                    'kxsolmax', 'kxsolmin', 'kxsold', 'kxsolw', 'kxsolm', // SOL price variants
+                    'kxcoin', 'kxdefi', 'kxnft', 'kxstable', 'kxusdt', 'kxusdc',
+                    'kxbtcmaxy', 'kxbtcminy', 'kxbtcmaxm', 'kxbtcminm' // BTC yearly/monthly
+                ],
+                politics: [
+                    'kxtrump', 'kxbiden', 'kxharris', 'kxpotus', 'kxsenate', 'kxhouse', 'kxgov',
+                    'kxcongress', 'kxelection', 'kxparty', 'kxspeaker', 'kximpeach', 'kxcabinet',
+                    'kxpresident', 'kxpowell', 'kxtrumpout', 'kxresign', 'kxleave',
+                    'kxpres', 'kxvote', 'kxdem', 'kxgop', 'kxrep', 'kxdoj', 'kxsotus', 'kxscotus',
+                    'kxag', 'kxsos', 'kxsec', 'kxcia', 'kxfbi', 'kxindictment', 'kxconvict',
+                    'kxnominate', 'kxconfirm', 'kxveto', 'kxexec', 'kxpardon', 'kxapproval',
+                    'kxmusk', 'kxdoge25', 'kxdogegov' // Musk/DOGE government
+                ],
+                finance: [
+                    'kxfed', 'kxcpi', 'kxgdp', 'kxjobs', 'kxrate', 'kxinfl', 'kxsp', 'kxndx',
+                    'kxdji', 'kxstock', 'kxearn', 'kxipo', 'kxspx', 'kxnas', 'kxdow', 'kxvix',
+                    'kxunemploy', 'kxrecession', 'kxtariff', 'kxoil', 'kxgold', 'kxyield',
+                    'kxfomc', 'kxffr', 'kxpce', 'kxppi', 'kxism', 'kxnfp', 'kxjolts',
+                    'kxspxd', 'kxspxw', 'kxspxm', 'kxspxy', 'kxnasd', 'kxnasw', 'kxnasm',
+                    'kxdjid', 'kxdjiw', 'kxdjim', 'kxrusselld', 'kxrussellw', 'kxrussellm',
+                    'kxwti', 'kxbrent', 'kxng', 'kxsilver', 'kxcopper', 'kxwheat', 'kxcorn',
+                    'kx10y', 'kx2y', 'kx30y', 'kxdxy', 'kxeur', 'kxgbp', 'kxjpy', 'kxcny',
+                    'kxinr', 'kxaapl', 'kxgoog', 'kxamzn', 'kxtsla', 'kxmeta', 'kxnflx'
+                ],
+                sports: [
+                    'kxnfl', 'kxnba', 'kxmlb', 'kxnhl', 'kxufc', 'kxf1', 'kxpga', 'kxtennis',
+                    'kxsoccer', 'kxfootball', 'kxsb', 'kxsuperbowl', 'kxwc', 'kxolympic', 'kxncaa',
+                    'kxnflmvp', 'kxnbamvp', 'kxmlbmvp', 'kxnhlmvp', 'kxheisman',
+                    'kxmarch', 'kxmadness', 'kxcfb', 'kxcfp', 'kxbowl', 'kxworldseries',
+                    'kxstanley', 'kxfinals', 'kxplayoff', 'kxchamp', 'kxwin', 'kxgame',
+                    'kxwimbledon', 'kxusopen', 'kxfrench', 'kxaustralia', 'kxmasters',
+                    'kxepl', 'kxlaliga', 'kxseriea', 'kxbundes', 'kxucl', 'kxmls'
+                ],
+                culture: [
+                    'kxoscars', 'kxemmy', 'kxgrammy', 'kxmovie', 'kxbox', 'kxstream', 'kxnetflix',
+                    'kxweather', 'kxtemp', 'kxtsa', 'kxhurricane', 'kxhighny', 'kxlowny', 'kxsnow',
+                    'kxgolden', 'kxglobes', 'kxbafta', 'kxtony', 'kxaward', 'kxrating',
+                    'kxhigh', 'kxlow', 'kxrain', 'kxflood', 'kxfire', 'kxquake', 'kxtornado',
+                    'kxtsany', 'kxtsala', 'kxtsachi', 'kxtsaatl', 'kxtsadfw', 'kxtsaden',
+                    'kxhighla', 'kxhighchi', 'kxhighatl', 'kxhighdfw', 'kxhighden',
+                    'kxlowla', 'kxlowchi', 'kxlowatl', 'kxlowdfw', 'kxlowden',
+                    'kxflu', 'kxcovid', 'kxvirus', 'kxcdc', 'kxfda', 'kxvaccine'
+                ],
+                tech: [
+                    'kxai', 'kxspacex', 'kxtesla', 'kxapple', 'kxgoogle', 'kxmeta', 'kxmsft', 'kxnvda',
+                    'kxopenai', 'kxgrok', 'kxclaude', 'kxgpt', 'kxrobot', 'kxelon', 'kxtwitter',
+                    'kxagi', 'kxchatgpt', 'kxgemini', 'kxllm', 'kxmodel', 'kxchip', 'kxsemi',
+                    'kxstarship', 'kxstarlink', 'kxrocket', 'kxmars', 'kxmoon', 'kxnasa',
+                    'kxneural', 'kxquantum', 'kxauto', 'kxev', 'kxself', 'kxdrive',
+                    'kxiphone', 'kxvision', 'kxquest', 'kxvr', 'kxar', 'kxmixed'
+                ],
+                geopolitics: [
+                    'kxwar', 'kxrussia', 'kxukraine', 'kxchina', 'kxtaiwan', 'kxiran',
+                    'kxisrael', 'kxgaza', 'kxnato', 'kxnorth', 'kxkorea', 'kxsyria', 'kxyemen',
+                    'kxpalestine', 'kxhezbollah', 'kxhamas', 'kxhouthi', 'kxisis',
+                    'kxsanction', 'kxembargo', 'kxtreaty', 'kxdeal', 'kxpeace', 'kxceasefire',
+                    'kxinvasion', 'kxannex', 'kxcoup', 'kxprotest', 'kxriot', 'kxstrike',
+                    'kxeu', 'kxuk', 'kxbrexit', 'kxgermany', 'kxfrance', 'kxitaly', 'kxjapan',
+                    'kxindia', 'kxpakistan', 'kxsaudi', 'kxturkey', 'kxmexico', 'kxbrazil'
+                ]
+            };
+
+            // Check series ticker first (cleaner), then full ticker
+            const tickersToCheck = [seriesTicker, ticker];
+            for (const t of tickersToCheck) {
+                if (!t) continue;
+                for (const [category, prefixes] of Object.entries(tickerCategories)) {
+                    for (const prefix of prefixes) {
+                        if (t.startsWith(prefix)) return category;
+                    }
+                }
+            }
+
+            // Keyword fallback for title
+            const keywords = {
+                crypto: ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'solana', 'doge'],
+                politics: ['trump', 'biden', 'president', 'congress', 'senate', 'election', 'cabinet', 'resign'],
+                finance: ['fed', 'interest rate', 'cpi', 'inflation', 'gdp', 'jobs', 's&p', 'nasdaq', 'recession'],
+                sports: ['nfl', 'nba', 'mlb', 'super bowl', 'championship', 'playoff'],
+                culture: ['oscar', 'weather', 'temperature', 'snow', 'tsa', 'box office'],
+                tech: ['ai', 'spacex', 'tesla', 'apple', 'openai'],
+                geopolitics: ['russia', 'ukraine', 'china', 'taiwan', 'war', 'iran', 'israel']
+            };
+
+            for (const [category, words] of Object.entries(keywords)) {
+                for (const word of words) {
+                    if (title.includes(word)) return category;
+                }
+            }
+
+            // Log unknown ticker for future categorization (only once per session)
+            if (seriesTicker && !unknownTickers.has(seriesTicker)) {
+                unknownTickers.add(seriesTicker);
+                console.log(`[Kalshi] Unknown ticker: ${seriesTicker.toUpperCase()} - "${market.title}" -> categorized as 'other'`);
+            }
+
+            return 'other';
+        }
+
+        // Platform-specific subtags
         const SUBTAGS = {
-            politics: ['all', 'biden', 'election', 'trump', 'courts', 'senate', 'congress', 'israel', 'ukraine', 'gaza', 'us election', 'cabinet', 'venezuela', 'gov shutdown', 'h-1b', 'trade war', 'south korea'],
-            sports: ['all', 'american football', 'basketball', 'esports', 'baseball', 'hockey', 'tennis', 'soccer', 'football', 'mma', 'golf', 'chess', 'motorsport', 'cricket', 'boxing', 'nfl', 'nba', 'nhl', 'mlb', 'f1', 'ufc'],
-            crypto: ['all', 'ethereum', 'bitcoin', 'xrp', 'solana', 'microstrategy', 'dogecoin', 'btc', 'crypto prices', 'eth'],
-            finance: ['all', 'indices', 'equities', 'acquisitions', 'commodities', 'fed rates', 'ipos', 'prediction markets', 'business', 'stock market', 'treasuries', 'trading', 'economy'],
-            tech: ['all', 'elon musk', 'ai', 'apple', 'spacex', 'grok', 'science', 'big tech', 'openai', 'meta', 'tiktok', 'technology'],
-            culture: ['all', 'movies', 'taylor swift', 'oscars', 'youtube', 'music', 'mrbeast', 'gta vi', 'weather', 'reality tv', 'celebrities', 'pop culture', 'awards', 'entertainment'],
-            geopolitics: ['all', 'israel', 'gaza', 'venezuela', 'ukraine', 'iran', 'middle east', 'india-pakistan', 'foreign policy', 'yemen', 'south korea', 'syria', 'china', 'canada', 'turkey']
+            polymarket: {
+                politics: ['all', 'trump', 'biden', 'harris', 'election', 'senate', 'congress', 'cabinet'],
+                sports: ['all', 'nfl', 'nba', 'mlb', 'nhl', 'ufc', 'f1', 'soccer'],
+                crypto: ['all', 'bitcoin', 'ethereum', 'solana', 'xrp', 'dogecoin'],
+                finance: ['all', 'fed rates', 'stock market', 'economy', 'ipos'],
+                tech: ['all', 'ai', 'elon musk', 'apple', 'spacex', 'openai'],
+                culture: ['all', 'oscars', 'movies', 'weather', 'celebrities'],
+                geopolitics: ['all', 'ukraine', 'israel', 'china', 'iran']
+            },
+            kalshi: {
+                politics: ['all', 'trump', 'biden', 'cabinet', 'senate', 'resign', 'powell'],
+                sports: ['all', 'nfl', 'nba', 'mlb', 'super bowl', 'march madness'],
+                crypto: ['all', 'bitcoin', 'btc', 'ethereum', '$100k', '$150k'],
+                finance: ['all', 'fed', 'interest rate', 'cpi', 'recession', 's&p', 'jobs'],
+                tech: ['all', 'ai', 'spacex', 'tesla', 'openai'],
+                culture: ['all', 'weather', 'temperature', 'oscars', 'tsa'],
+                geopolitics: ['all', 'russia', 'ukraine', 'china', 'taiwan', 'iran']
+            }
         };
 
         // Initialize
@@ -328,26 +936,79 @@
 
         async function loadMarkets() {
             const grid = document.getElementById('marketsGrid');
-            grid.innerHTML = '<div style="grid-column: 1/-1; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 50vh; gap: 16px;"><div class="spinner"></div><div style="color: var(--text-muted-light); font-size: 14px;">loading markets...</div></div>';
+            const platform = PLATFORMS[currentPlatform];
+
+            grid.innerHTML = `
+                <div class="loading-container">
+                    <div class="spinner" style="width: 40px; height: 40px;"></div>
+                    <div class="loading-text">loading markets...</div>
+                </div>
+            `;
 
             try {
-                // First: load 300 markets quickly for instant display
-                console.log('Loading first batch...');
-                allEvents = await api.getEvents(300);
-                console.log(`Loaded ${allEvents.length} events (first batch)`);
-                filterAndRender();
+                console.log(`[${currentPlatform}] Loading markets...`);
+                const startTime = Date.now();
+                let rawData = [];
 
-                // Then: load remaining markets in background
+                if (currentPlatform === 'polymarket') {
+                    rawData = await api.getEvents(300);
+                } else {
+                    const response = await fetch(`${api.baseUrl}/api/dome/events?platform=kalshi&limit=300`);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+                    rawData = await response.json();
+                }
+
+                const loadTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`[${currentPlatform}] Loaded ${rawData.length} raw markets in ${loadTime}s`);
+
+                // Debug: log first market structure
+                if (rawData.length > 0) {
+                    console.log(`[${currentPlatform}] Sample market structure:`, rawData[0]);
+                }
+
+                // Normalize all markets
+                allEvents = rawData.map(m => normalizeMarket(m, currentPlatform));
+                console.log(`[${currentPlatform}] Normalized ${allEvents.length} markets`);
+
+                filterAndRender();
                 loadRemainingMarkets();
+
             } catch (error) {
                 console.error('loadMarkets error:', error);
-                grid.innerHTML = `
-                    <div class="empty-state" style="grid-column: 1/-1">
-                        <h3>failed to load markets</h3>
-                        <p>${error.message || 'please make sure the API server is running on port 8765'}</p>
-                    </div>
-                `;
+                showError(error.message);
             }
+        }
+
+        function showError(errorMsg) {
+            const grid = document.getElementById('marketsGrid');
+            const platform = PLATFORMS[currentPlatform];
+
+            let helpText = 'Make sure the API server is running on port 8765.';
+            let icon = '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg>';
+
+            if (errorMsg.includes('401') || errorMsg.includes('403')) {
+                helpText = 'DOME_API_KEY authentication failed. Check your .env file.';
+            } else if (errorMsg.includes('fetch') || errorMsg.includes('Network')) {
+                helpText = 'Cannot connect to server. Run: python api_server.py';
+            }
+
+            grid.innerHTML = `
+                <div class="empty-state" style="grid-column: 1/-1; padding: 60px 20px;">
+                    ${icon}
+                    <h3 style="margin-top: 20px;">Failed to load ${platform.name} markets</h3>
+                    <p style="color: #ef4444; margin: 12px 0; font-family: monospace; font-size: 13px;
+                              background: rgba(239,68,68,0.1); padding: 8px 16px; border-radius: 6px;">${errorMsg}</p>
+                    <p style="font-size: 14px; color: var(--text-muted); max-width: 400px; line-height: 1.6;">${helpText}</p>
+                    <button onclick="loadMarkets()" style="margin-top: 20px; padding: 12px 24px;
+                            background: var(--primary); color: white; border: none; border-radius: 8px;
+                            font-size: 14px; font-weight: 600; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
         }
 
         async function loadRemainingMarkets() {
@@ -355,28 +1016,32 @@
             isLoadingMore = true;
 
             try {
-                // Load full dataset
-                console.log('Loading remaining markets in background...');
-                const fullData = await api.getEvents(5000);
+                let fullData;
+                if (currentPlatform === 'polymarket') {
+                    fullData = await api.getEvents(5000);
+                } else {
+                    const response = await fetch(`${api.baseUrl}/api/dome/events?platform=kalshi&limit=5000`);
+                    if (!response.ok) throw new Error(`Failed: ${response.status}`);
+                    fullData = await response.json();
+                }
 
-                // Merge with existing (avoid duplicates)
+                const normalized = fullData.map(m => normalizeMarket(m, currentPlatform));
                 const existingIds = new Set(allEvents.map(e => e.id));
                 let newCount = 0;
-                for (const event of fullData) {
+
+                for (const event of normalized) {
                     if (!existingIds.has(event.id)) {
                         allEvents.push(event);
                         newCount++;
                     }
                 }
 
-                console.log(`Loaded ${newCount} additional markets (total: ${allEvents.length})`);
-
-                // Re-render only if user hasn't scrolled much
                 if (newCount > 0) {
+                    console.log(`[${currentPlatform}] Loaded ${newCount} more markets (total: ${allEvents.length})`);
                     filterAndRender();
                 }
             } catch (error) {
-                console.error('Error loading remaining markets:', error);
+                console.error('loadRemainingMarkets error:', error);
             } finally {
                 isLoadingMore = false;
             }
@@ -384,41 +1049,41 @@
 
         function matchesSubtag(event, subtag) {
             if (subtag === 'all') return true;
-            const title = (event.title || '').toLowerCase();
-            const description = (event.description || '').toLowerCase();
-            const tags = (event.tags || []).map(t => {
-                if (typeof t === 'string') return t.toLowerCase();
-                return (t.label || t.slug || '').toLowerCase();
-            });
-            const subtagLower = subtag.toLowerCase();
-            return title.includes(subtagLower) ||
-                   description.includes(subtagLower) ||
-                   tags.some(t => t.includes(subtagLower));
+            const search = subtag.toLowerCase();
+            const title = event.title.toLowerCase();
+            const ticker = (event.ticker || event.eventTicker || '').toLowerCase();
+            return title.includes(search) || ticker.includes(search);
         }
 
         function filterAndRender() {
-            // Filter out ended markets and by category
+            const now = new Date();
+
             filteredEvents = allEvents.filter(event => {
+                // Skip closed/resolved markets
+                if (event.status !== 'open') return false;
+                if (event.result !== null && event.result !== undefined) return false;
+
                 // Skip ended markets
-                if (event.endDate) {
-                    const endDate = new Date(event.endDate);
-                    if (endDate < new Date()) return false;
-                }
-                if (currentCategory === 'all') return true;
-                return utils.getCategory(event) === currentCategory;
+                if (event.closeTime && event.closeTime < now) return false;
+
+                // Category filter
+                if (currentCategory !== 'all' && event.category !== currentCategory) return false;
+
+                return true;
             });
 
-            // Filter by subtag
+            // Subtag filter
             if (currentSubtag !== 'all') {
-                filteredEvents = filteredEvents.filter(event => matchesSubtag(event, currentSubtag));
+                filteredEvents = filteredEvents.filter(e => matchesSubtag(e, currentSubtag));
             }
 
-            // Filter by search
+            // Search filter
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
-                filteredEvents = filteredEvents.filter(event =>
-                    (event.title || '').toLowerCase().includes(q) ||
-                    (event.description || '').toLowerCase().includes(q)
+                filteredEvents = filteredEvents.filter(e =>
+                    e.title.toLowerCase().includes(q) ||
+                    (e.ticker || '').toLowerCase().includes(q) ||
+                    (e.eventTicker || '').toLowerCase().includes(q)
                 );
             }
 
@@ -426,12 +1091,12 @@
             filteredEvents.sort((a, b) => {
                 switch (currentSort) {
                     case 'volume':
-                        return utils.getTotalVolume(b) - utils.getTotalVolume(a);
+                        return b.volume - a.volume;
                     case 'newest':
-                        return new Date(b.createdAt || b.startDate || 0) - new Date(a.createdAt || a.startDate || 0);
+                        return (b.startTime || 0) - (a.startTime || 0);
                     case 'ending':
-                        const aEnd = a.endDate ? new Date(a.endDate) : new Date('2099-01-01');
-                        const bEnd = b.endDate ? new Date(b.endDate) : new Date('2099-01-01');
+                        const aEnd = a.closeTime || new Date('2099-01-01');
+                        const bEnd = b.closeTime || new Date('2099-01-01');
                         return aEnd - bEnd;
                     default:
                         return 0;
@@ -444,6 +1109,12 @@
         function renderMarkets() {
             const grid = document.getElementById('marketsGrid');
             const toShow = filteredEvents.slice(0, displayCount);
+            const platform = PLATFORMS[currentPlatform];
+
+            // Update subtitle
+            const subtitle = document.getElementById('pageSubtitle');
+            const categoryText = currentCategory === 'all' ? '' : ` in ${currentCategory}`;
+            subtitle.textContent = `${filteredEvents.length} ${platform.name} markets${categoryText}`;
 
             if (toShow.length === 0) {
                 grid.innerHTML = `
@@ -457,43 +1128,53 @@
             }
 
             grid.innerHTML = toShow.map((event, index) => {
-                const volume = utils.getTotalVolume(event);
-                const price = utils.getBestPrice(event);
-                const category = utils.getCategory(event);
+                const endDate = event.closeTime
+                    ? event.closeTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    : 'N/A';
 
                 return `
                     <div class="market-card">
-                        <a href="https://polymarket.com/event/${event.slug}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <a href="${event.url}" target="_blank" style="text-decoration: none; color: inherit;">
                             <div class="market-card-meta">
-                                <span class="badge badge-${category}">${category}</span>
-                                <span>${utils.formatDate(event.endDate)}</span>
+                                <span class="badge badge-${event.category}">${event.category}</span>
+                                <span>${endDate}</span>
                             </div>
-                            <div class="market-card-title">${event.title || 'untitled'}</div>
+                            <div class="market-card-title">${event.title}</div>
                             <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 12px;">
                                 <div>
-                                    ${price ? `
-                                        <div class="market-card-price">${utils.formatPercent(price.yes)}</div>
+                                    ${event.yesPrice !== null ? `
+                                        <div class="market-card-price">${utils.formatPercent(event.yesPrice)}</div>
                                         <div class="market-card-volume">yes price</div>
                                     ` : '<div class="market-card-volume">no price data</div>'}
                                 </div>
                                 <div style="text-align: right;">
-                                    <div style="font-size: 16px; font-weight: 600; color: var(--text-dark);">${utils.formatCurrency(volume)}</div>
-                                    <div class="market-card-volume">volume</div>
+                                    <div style="font-size: 16px; font-weight: 600; color: var(--text-dark);">${utils.formatCurrency(event.volume)}</div>
+                                    <div class="market-card-volume">
+                                        volume${event.volume24h ? ` <span style="opacity:0.7">(${utils.formatCurrency(event.volume24h)} 24h)</span>` : ''}
+                                        ${event.openInterest > 0 ? ` <span style="opacity:0.7">| ${event.openInterest.toLocaleString()} OI</span>` : ''}
+                                    </div>
                                 </div>
                             </div>
                         </a>
                         <div class="market-card-buttons">
                             <button class="context-btn" onclick="showContext(${index})">get context</button>
-                            <a href="https://t.me/okdotbet_bot?start=events_${event.id || event.slug}" target="_blank" class="okbet-btn">
-                                <img src="/images/okbet.png" alt="okbet">
-                                bet via okbet
-                            </a>
+                            ${currentPlatform === 'polymarket' ? `
+                                <a href="https://t.me/okdotbet_bot?start=events_${event.id || event.slug}" target="_blank" class="okbet-btn">
+                                    <img src="/images/okbet.png" alt="okbet">
+                                    bet via okbet
+                                </a>
+                            ` : `
+                                <a href="${event.url}" target="_blank" class="okbet-btn">
+                                    <img src="${platform.logo}" alt="${platform.name}">
+                                    trade on kalshi
+                                </a>
+                            `}
                         </div>
                     </div>
                 `;
             }).join('');
 
-            // Show/hide load more button
+            // Load more button
             const loadMoreBtn = document.getElementById('loadMoreBtn');
             if (displayCount < filteredEvents.length) {
                 loadMoreBtn.style.display = 'inline-flex';
@@ -505,16 +1186,16 @@
 
         function updateSubtags() {
             const container = document.getElementById('subtagFilters');
+            const platformSubtags = SUBTAGS[currentPlatform] || SUBTAGS.polymarket;
+            const categorySubtags = platformSubtags[currentCategory];
 
-            if (currentCategory === 'all' || currentCategory === 'other' || !SUBTAGS[currentCategory]) {
+            if (currentCategory === 'all' || currentCategory === 'other' || !categorySubtags) {
                 container.classList.remove('visible');
                 return;
             }
 
             container.classList.add('visible');
-            const subtags = SUBTAGS[currentCategory];
-
-            container.innerHTML = subtags.map(tag => `
+            container.innerHTML = categorySubtags.map(tag => `
                 <button class="subtag-btn ${tag === currentSubtag ? 'active' : ''}" data-subtag="${tag}">
                     ${tag}
                 </button>
@@ -529,9 +1210,25 @@
                     filterAndRender();
                 });
             });
+
+            // Apply tilt effect to new subtag buttons
+            applyTiltEffect('.subtag-btn');
         }
 
         function setupEventListeners() {
+            // Platform filters
+            document.querySelectorAll('#platformFilters [data-platform]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    document.querySelectorAll('#platformFilters [data-platform]').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentPlatform = btn.dataset.platform;
+                    currentSubtag = 'all';
+                    displayCount = 24;
+                    updateSubtags();
+                    await loadMarkets();
+                });
+            });
+
             // Category filters
             document.querySelectorAll('#mainCategories [data-category]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -557,8 +1254,7 @@
             });
 
             // Search
-            const searchInput = document.getElementById('searchInput');
-            searchInput.addEventListener('input', utils.debounce((e) => {
+            document.getElementById('searchInput').addEventListener('input', utils.debounce((e) => {
                 searchQuery = e.target.value;
                 displayCount = 24;
                 filterAndRender();
@@ -570,54 +1266,211 @@
                 renderMarkets();
             });
 
-            // Modal close on overlay click
+            // Modal close
             document.getElementById('contextModal').addEventListener('click', (e) => {
-                if (e.target.id === 'contextModal') {
-                    closeModal();
+                if (e.target.id === 'contextModal') closeModal();
+            });
+
+            // Keyboard
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeModal();
+                if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                    e.preventDefault();
+                    document.getElementById('searchInput').focus();
                 }
             });
         }
 
-        // Context Modal Functions
+        // Context Modal
         function showContext(index) {
             const event = filteredEvents[index];
             if (!event) return;
 
             const modal = document.getElementById('contextModal');
-            const title = document.getElementById('modalTitle');
-            const content = document.getElementById('modalContent');
+            const platform = PLATFORMS[currentPlatform];
 
-            title.textContent = event.title || 'Market Context';
-            content.innerHTML = '<div class="modal-loading">Generating AI context... (this may take 10-30 seconds)</div>';
+            // Update header
+            document.getElementById('modalLogo').src = platform.logo;
+            document.getElementById('modalTitle').textContent = event.title;
+            document.getElementById('modalCategory').textContent = event.category || 'market';
+
             modal.classList.add('active');
 
-            // Fetch real Market Context from Polymarket AI
-            fetchMarketContext(event.slug).then(ctx => {
-                content.innerHTML = `<div style="white-space: pre-wrap; line-height: 1.6;">${ctx}</div>`;
-            }).catch(err => {
-                content.innerHTML = `<div style="color: var(--red);">Failed to generate context: ${err.message}</div>`;
-            });
+            // Build modal content
+            const body = document.getElementById('modalBody');
+
+            // Calculate time remaining
+            let timeBadge = '';
+            if (event.closeTime) {
+                const now = new Date();
+                const diff = event.closeTime - now;
+                if (diff > 0) {
+                    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+                    let timeText, badgeClass;
+                    if (days > 7) {
+                        timeText = `${days} days`;
+                        badgeClass = 'normal';
+                    } else if (days > 0) {
+                        timeText = `${days}d ${hours}h`;
+                        badgeClass = days <= 3 ? 'warning' : 'normal';
+                    } else {
+                        timeText = `${hours}h remaining`;
+                        badgeClass = 'urgent';
+                    }
+                    timeBadge = `<span class="time-badge ${badgeClass}">${timeText}</span>`;
+                }
+            }
+
+            // Calculate days remaining
+            let daysLeft = '';
+            if (event.closeTime) {
+                const days = Math.floor((event.closeTime - new Date()) / (1000 * 60 * 60 * 24));
+                daysLeft = days > 0 ? `${days}d` : '<1d';
+            }
+
+            body.innerHTML = `
+                <!-- Stats Grid - 3 columns -->
+                <div class="stats-grid">
+                    <div class="stat-card highlight">
+                        <div class="stat-label">probability</div>
+                        <div class="stat-value">${event.yesPrice !== null ? utils.formatPercent(event.yesPrice) : 'N/A'}</div>
+                        <div class="stat-sub">${event.yesPrice !== null ? `buy @ ${(event.yesPrice * 100).toFixed(0)}¢` : ''}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">volume</div>
+                        <div class="stat-value">${utils.formatCurrency(event.volume)}</div>
+                        <div class="stat-sub">${event.volume24h ? `${utils.formatCurrency(event.volume24h)} 24h` : ''}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">closes</div>
+                        <div class="stat-value">${daysLeft || 'TBD'}</div>
+                        <div class="stat-sub">${event.closeTime ? event.closeTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</div>
+                    </div>
+                </div>
+
+                <!-- Market Info -->
+                <div class="info-section">
+                    <div class="info-section-title">details</div>
+                    ${event.closeTime ? `
+                    <div class="info-row">
+                        <span class="info-label">closes</span>
+                        <span class="info-value">${event.closeTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                    ` : ''}
+                    ${event.startTime ? `
+                    <div class="info-row">
+                        <span class="info-label">opened</span>
+                        <span class="info-value">${event.startTime.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                    ` : ''}
+                    ${event.openInterest > 0 ? `
+                    <div class="info-row">
+                        <span class="info-label">open interest</span>
+                        <span class="info-value">${event.openInterest.toLocaleString()} contracts</span>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <!-- AI Analysis -->
+                <div class="ai-section">
+                    <div class="ai-section-header">
+                        <div class="ai-section-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5z"/></svg>
+                            ai analysis
+                        </div>
+                        <button class="ai-btn" id="generateAiBtn" onclick="generateContext('${encodeURIComponent(event.title)}', '${event.ticker || event.slug || ''}')">
+                            generate insights
+                        </button>
+                    </div>
+                    <div class="ai-content" id="aiContent"></div>
+                </div>
+
+                <!-- CTA -->
+                ${currentPlatform === 'polymarket' ? `
+                    <a href="https://t.me/okdotbet_bot?start=events_${event.id || event.slug}" target="_blank" class="modal-cta">
+                        <img src="/images/okbet.png" alt="okbet">
+                        bet via okbet
+                    </a>
+                ` : `
+                    <a href="${event.url}" target="_blank" class="modal-cta">
+                        <img src="${platform.logo}" alt="${platform.name}">
+                        trade on kalshi
+                    </a>
+                `}
+            `;
         }
 
         function closeModal() {
             document.getElementById('contextModal').classList.remove('active');
         }
 
-        async function fetchMarketContext(slug) {
-            if (!slug) throw new Error('No event slug');
+        async function generateContext(encodedTitle, identifier) {
+            const title = decodeURIComponent(encodedTitle);
+            const contentEl = document.getElementById('aiContent');
+            const btnEl = document.getElementById('generateAiBtn');
 
-            const apiBase = window.location.hostname === 'localhost'
-                ? 'http://localhost:8765'
-                : 'https://polydictions-production.up.railway.app';
-            const response = await fetch(`${apiBase}/api/context?slug=${encodeURIComponent(slug)}`);
-            const data = await response.json();
+            if (!contentEl || !btnEl) return;
 
-            if (data.success && data.context) {
-                return data.context;
-            } else {
-                throw new Error(data.error || 'Failed to fetch context');
+            btnEl.disabled = true;
+            btnEl.textContent = 'Generating...';
+            contentEl.innerHTML = '<div style="display: flex; align-items: center; gap: 10px;"><div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div> Generating analysis...</div>';
+
+            try {
+                const apiBase = api.baseUrl;
+                const endpoint = currentPlatform === 'kalshi'
+                    ? `/api/kalshi/context?title=${encodeURIComponent(title)}&ticker=${encodeURIComponent(identifier)}`
+                    : `/api/context?slug=${encodeURIComponent(identifier)}`;
+
+                const response = await fetch(apiBase + endpoint);
+                const data = await response.json();
+
+                if (data.success && data.context) {
+                    contentEl.innerHTML = data.context;
+                    btnEl.textContent = 'Regenerate';
+                } else {
+                    throw new Error(data.error || 'Failed to generate');
+                }
+            } catch (error) {
+                console.error('Context error:', error);
+                contentEl.innerHTML = `<span style="color: #ef4444;">Failed: ${error.message}</span>`;
+                btnEl.textContent = 'Retry';
+            } finally {
+                btnEl.disabled = false;
             }
         }
+
+        // Dynamic tilt effect for buttons
+        function applyTiltEffect(selector) {
+            document.querySelectorAll(selector).forEach(el => {
+                el.style.transformStyle = 'preserve-3d';
+                el.style.transition = '0.15s cubic-bezier(0.4,0,0.2,1)';
+
+                el.addEventListener('mousemove', (e) => {
+                    const rect = el.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    const rotateX = ((y - centerY) / centerY) * -12;
+                    const rotateY = ((x - centerX) / centerX) * 12;
+                    el.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(8px)`;
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    el.style.transform = 'perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)';
+                });
+            });
+        }
+
+        // Apply tilt to all buttons on load
+        document.addEventListener('DOMContentLoaded', () => {
+            applyTiltEffect('.navbar-link');
+            applyTiltEffect('.filter-btn');
+            applyTiltEffect('.subtag-btn');
+            applyTiltEffect('#loadMoreBtn');
+        });
     </script>
 </body>
 </html>

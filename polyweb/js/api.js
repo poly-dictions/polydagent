@@ -8,6 +8,9 @@ const API_BASE = window.location.hostname === 'localhost'
     : 'https://polydictions-production.up.railway.app';
 
 const api = {
+    // Expose base URL for other scripts
+    baseUrl: API_BASE,
+
     /**
      * Fetch events from Polymarket
      */
@@ -82,12 +85,28 @@ const utils = {
      * Format currency
      */
     formatCurrency(value) {
+        // Handle null, undefined, NaN
+        if (value == null || isNaN(value)) return '$0';
+
+        // Ensure positive number
+        value = Math.abs(value);
+
         if (value >= 1000000) {
             return '$' + (value / 1000000).toFixed(1) + 'M';
+        } else if (value >= 10000) {
+            // 10K+ show as whole K (e.g., $45K)
+            return '$' + Math.round(value / 1000) + 'K';
         } else if (value >= 1000) {
+            // 1K-10K show with decimal (e.g., $2.5K)
             return '$' + (value / 1000).toFixed(1) + 'K';
+        } else if (value >= 1) {
+            // $1 - $999 show as whole dollars
+            return '$' + Math.round(value);
+        } else if (value > 0) {
+            // Less than $1 show cents
+            return Math.round(value * 100) + '¢';
         }
-        return '$' + value.toFixed(0);
+        return '$0';
     },
 
     /**

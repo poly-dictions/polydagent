@@ -6,6 +6,7 @@
     <title>research - polydictions</title>
     <link rel="icon" type="image/png" href="../images/1.png">
     <link href="../stylesheet_0.css" rel="stylesheet">
+    <link href="../css/app.css" rel="stylesheet">
 
     <style>
         * {
@@ -31,20 +32,6 @@
             max-width: 800px;
             margin: 0 auto;
             padding: 40px 20px;
-        }
-
-        /* Header */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 48px;
-        }
-
-        .logo {
-            font-size: 24px;
-            font-weight: 800;
-            color: white;
         }
 
         /* Hero Section */
@@ -251,6 +238,66 @@
             color: #991b1b;
         }
 
+        /* AI Context Button */
+        .ai-context-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .ai-context-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .ai-context-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #fb651e;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-context-btn {
+            padding: 8px 16px;
+            background: #fb651e;
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ai-context-btn:hover:not(:disabled) {
+            background: #e55a1a;
+            transform: scale(1.02);
+        }
+
+        .ai-context-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .ai-context-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .ai-context-content ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .ai-context-content li {
+            margin: 4px 0;
+        }
+
         /* Input Area */
         .input-area {
             display: flex;
@@ -437,10 +484,27 @@
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="header">
-        <a href="../" class="logo">polydictions</a>
-    </header>
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">home</a>
+            <a href="/markets/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
+            <a href="/alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
+            <a href="/whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
+            <a href="/arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
+            <a href="/launchpad/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
+            <a href="/roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
+            <a href="/research/" class="navbar-link active" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">research</a>
+        </div>
+        <div class="navbar-right">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                follow on x
+            </a>
+        </div>
+    </nav>
 
     <!-- Hero -->
     <section class="hero">
@@ -454,7 +518,7 @@
             <div class="messages" id="messages">
                 <div class="placeholder-msg">
                     <div class="placeholder-title">ask anything about prediction markets</div>
-                    <div class="hint">paste a polymarket url or ask a question</div>
+                    <div class="hint">paste a polymarket or kalshi url, or ask a question</div>
                 </div>
             </div>
 
@@ -466,7 +530,7 @@
             </div>
 
             <div class="input-area">
-                <input type="text" class="chat-input" id="chatInput" placeholder="paste polymarket url or ask a question..." autocomplete="off">
+                <input type="text" class="chat-input" id="chatInput" placeholder="paste polymarket/kalshi url or ask a question..." autocomplete="off">
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                     <span>send</span>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -488,6 +552,7 @@
         const quickActions = document.getElementById('quickActions');
 
         let isProcessing = false;
+        let contextCounter = 0;
 
         // Enter key handler
         chatInput.addEventListener('keypress', (e) => {
@@ -522,11 +587,19 @@
             try {
                 // Check if it's a polymarket URL
                 const polymarketMatch = input.match(/polymarket\.com\/event\/([^\/\s?]+)/);
+                // Check if it's a kalshi URL - extract the LAST part (market ticker)
+                // URL format: kalshi.com/markets/{series}/{event-slug}/{market-ticker}
+                const kalshiMatch = input.match(/kalshi\.com\/markets\/(.+)/i);
 
                 if (polymarketMatch) {
                     // Fetch event data
                     const eventSlug = polymarketMatch[1];
                     await analyzeEvent(eventSlug, loadingEl);
+                } else if (kalshiMatch) {
+                    // Extract ticker - last part of the path
+                    const pathParts = kalshiMatch[1].split('/').filter(p => p && !p.includes('?'));
+                    const ticker = pathParts[pathParts.length - 1] || pathParts[0];
+                    await analyzeKalshiMarket(ticker, loadingEl);
                 } else {
                     // General question - use AI
                     await answerQuestion(input, loadingEl);
@@ -567,6 +640,35 @@
                 console.error('Event analysis error:', error);
                 loadingEl.remove();
                 addMessage('failed to analyze event. please try again.', 'assistant');
+            }
+        }
+
+        async function analyzeKalshiMarket(ticker, loadingEl) {
+            try {
+                // Fetch Kalshi market via our backend
+                const resp = await fetch(`${API_URL}/api/research/kalshi/${ticker}`);
+
+                if (!resp.ok) {
+                    loadingEl.remove();
+                    addMessage('could not find that kalshi market. please check the url and try again.', 'assistant');
+                    return;
+                }
+
+                const data = await resp.json();
+
+                if (!data.market) {
+                    loadingEl.remove();
+                    addMessage('could not find that kalshi market. please check the url and try again.', 'assistant');
+                    return;
+                }
+
+                loadingEl.remove();
+                addKalshiAnalysis(data.market, data.analysis);
+
+            } catch (error) {
+                console.error('Kalshi analysis error:', error);
+                loadingEl.remove();
+                addMessage('failed to analyze kalshi market. please try again.', 'assistant');
             }
         }
 
@@ -665,6 +767,98 @@
                 </div>
             `;
 
+            // AI Context section
+            const ctxId = contextCounter++;
+            html += `
+                <div class="ai-context-section">
+                    <div class="ai-context-header">
+                        <div class="ai-context-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5z"/></svg>
+                            ai context
+                        </div>
+                        <button class="ai-context-btn" id="ctxBtn${ctxId}" onclick="generatePolymarketContext('${event.slug}', ${ctxId})">
+                            get insights
+                        </button>
+                    </div>
+                    <div class="ai-context-content" id="ctxContent${ctxId}"></div>
+                </div>
+            `;
+
+            msgEl.innerHTML = html;
+            messagesContainer.appendChild(msgEl);
+            scrollToBottom();
+        }
+
+        function addKalshiAnalysis(market, analysis) {
+            const msgEl = document.createElement('div');
+            msgEl.className = 'message assistant';
+
+            const yesPrice = market.yes_price !== undefined ? market.yes_price : (market.last_price || 50);
+            const noPrice = 100 - yesPrice;
+            const volume = market.volume || 0;
+
+            let html = `<strong>${market.title || market.market_ticker}</strong>`;
+
+            html += `
+                <div class="market-card">
+                    <div class="market-card-header">
+                        <div class="market-title">${market.title || market.market_ticker}</div>
+                        <div class="market-volume">$${formatNumber(volume)} vol</div>
+                    </div>
+                    <div class="market-outcomes">
+                        <div class="outcome-row">
+                            <span class="outcome-name">Yes</span>
+                            <span class="outcome-price yes">${yesPrice.toFixed(1)}%</span>
+                        </div>
+                        <div class="outcome-row">
+                            <span class="outcome-name">No</span>
+                            <span class="outcome-price no">${noPrice.toFixed(1)}%</span>
+                        </div>
+                    </div>
+                    <div class="market-stats">
+                        <div class="market-stat">ticker: ${market.market_ticker || market.event_ticker || 'N/A'}</div>
+                        <div class="market-stat">status: ${market.status || 'open'}</div>
+                        ${market.close_time ? `<div class="market-stat">closes: ${new Date(market.close_time * 1000).toLocaleDateString()}</div>` : ''}
+                    </div>
+                </div>
+            `;
+
+            // Show analysis
+            if (analysis) {
+                html += `
+                    <div class="analysis-section">
+                        <div class="analysis-title">analysis</div>
+                        <div class="analysis-content">${formatAnalysis(analysis)}</div>
+                    </div>
+                `;
+            }
+
+            // Link to Kalshi
+            html += `
+                <div style="margin-top: 12px;">
+                    <a href="https://kalshi.com/markets/${(market.event_ticker || market.market_ticker || '').toLowerCase()}" target="_blank" rel="noopener" style="color: #fb651e; font-size: 13px; text-decoration: none;">View on Kalshi →</a>
+                </div>
+            `;
+
+            // AI Context section for Kalshi
+            const ctxId = contextCounter++;
+            const ticker = market.market_ticker || market.event_ticker || '';
+            const title = market.title || ticker;
+            html += `
+                <div class="ai-context-section">
+                    <div class="ai-context-header">
+                        <div class="ai-context-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5A2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0a2.5 2.5 0 0 0-2.5 2.5a2.5 2.5 0 0 0 2.5 2.5a2.5 2.5 0 0 0 2.5-2.5a2.5 2.5 0 0 0-2.5-2.5z"/></svg>
+                            ai context
+                        </div>
+                        <button class="ai-context-btn" id="ctxBtn${ctxId}" onclick="generateKalshiContext('${encodeURIComponent(title)}', '${ticker}', ${ctxId})">
+                            get insights
+                        </button>
+                    </div>
+                    <div class="ai-context-content" id="ctxContent${ctxId}"></div>
+                </div>
+            `;
+
             msgEl.innerHTML = html;
             messagesContainer.appendChild(msgEl);
             scrollToBottom();
@@ -750,6 +944,66 @@
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
             return num.toFixed(0);
+        }
+
+        // AI Context generation functions
+        async function generatePolymarketContext(slug, ctxId) {
+            const contentEl = document.getElementById(`ctxContent${ctxId}`);
+            const btnEl = document.getElementById(`ctxBtn${ctxId}`);
+
+            if (!contentEl || !btnEl) return;
+
+            btnEl.disabled = true;
+            btnEl.textContent = 'generating...';
+            contentEl.innerHTML = '<div style="color: #666; font-size: 13px;">analyzing market data, news & social sentiment...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/api/context?slug=${encodeURIComponent(slug)}`);
+                const data = await response.json();
+
+                if (data.success && data.context) {
+                    contentEl.innerHTML = data.context;
+                    btnEl.textContent = 'refresh';
+                } else {
+                    throw new Error(data.error || 'Failed to generate');
+                }
+            } catch (error) {
+                console.error('Context error:', error);
+                contentEl.innerHTML = `<span style="color: #ef4444;">failed: ${error.message}</span>`;
+                btnEl.textContent = 'retry';
+            } finally {
+                btnEl.disabled = false;
+            }
+        }
+
+        async function generateKalshiContext(encodedTitle, ticker, ctxId) {
+            const title = decodeURIComponent(encodedTitle);
+            const contentEl = document.getElementById(`ctxContent${ctxId}`);
+            const btnEl = document.getElementById(`ctxBtn${ctxId}`);
+
+            if (!contentEl || !btnEl) return;
+
+            btnEl.disabled = true;
+            btnEl.textContent = 'generating...';
+            contentEl.innerHTML = '<div style="color: #666; font-size: 13px;">analyzing market data, news & social sentiment...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/api/kalshi/context?title=${encodeURIComponent(title)}&ticker=${encodeURIComponent(ticker)}`);
+                const data = await response.json();
+
+                if (data.success && data.context) {
+                    contentEl.innerHTML = data.context;
+                    btnEl.textContent = 'refresh';
+                } else {
+                    throw new Error(data.error || 'Failed to generate');
+                }
+            } catch (error) {
+                console.error('Context error:', error);
+                contentEl.innerHTML = `<span style="color: #ef4444;">failed: ${error.message}</span>`;
+                btnEl.textContent = 'retry';
+            } finally {
+                btnEl.disabled = false;
+            }
         }
     </script>
 </body>
