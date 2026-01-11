@@ -429,6 +429,9 @@ class XOAuthAPI:
     @staticmethod
     async def post_tweet(access_token: str, text: str, reply_to: str = None) -> Optional[str]:
         """Post a tweet using OAuth access token"""
+        # Truncate to 280 chars for non-Blue accounts
+        if len(text) > 280:
+            text = text[:277] + "..."
         payload = {"text": text}
         if reply_to:
             payload["reply"] = {"in_reply_to_tweet_id": reply_to}
@@ -632,7 +635,11 @@ class TwitterAPI:
 # =============================================================================
 
 class PolymarketScanner:
-    SPAM_WORDS = ['up or down', 'higher or lower', 'above or below', 'am-', 'pm-', 'am et', 'pm et', ':00', ':15', ':30', ':45']
+    SPAM_WORDS = [
+        'up or down', 'higher or lower', 'above or below', 'updown', 'up/down',
+        'am-', 'pm-', 'am et', 'pm et', ':00', ':15', ':30', ':45',
+        '5m', '15m', '1h', '4h'  # Short timeframe markets waste FactsAI credits
+    ]
 
     async def fetch_events(self, limit: int = 100) -> List[Dict]:
         url = f"{POLYMARKET_API}/events"
@@ -771,14 +778,11 @@ class PolymarketScanner:
 class AIAnalyzer:
     @staticmethod
     async def analyze_market(title: str, yes_odds: float, no_odds: float, volume: float, custom_prompt: str = "", niche: str = "general", is_multi: bool = False, top_options: list = None) -> Optional[Dict]:
-        if not ANTHROPIC_API_KEY:
-            return {
-                "signal": "uncertain",
-                "confidence": "low",
-                "reasons": ["insufficient data"],
-                "main_risk": "market uncertainty",
-                "notes": ""
-            }
+        OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
+
+        if not OPENROUTER_API_KEY and not FACTSAI_API_KEY:
+            logger.warning("No API keys for market analysis (OPENROUTER_API_KEY or FACTSAI_API_KEY)")
+            return None
 
         # First get facts from FactsAI
         facts = ""
@@ -798,7 +802,7 @@ class AIAnalyzer:
             except Exception as e:
                 logger.warning(f"FactsAI error: {e}")
 
-        # Use Anthropic Claude for structured analysis
+        # Use Xiaomi via OpenRouter for structured analysis (free)
         from datetime import datetime
         current_date = datetime.now().strftime("%B %d, %Y")
 
@@ -842,15 +846,28 @@ GOOD reasons: "Trump leads RCP avg by 3.2pts", "Fed signaled March cut", "deadli
 
 {f'Personality/style: {custom_prompt}' if custom_prompt else ''}"""
 
-        headers = {"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
-        data = {"model": "claude-3-haiku-20240307", "max_tokens": 800, "messages": [{"role": "user", "content": prompt}]}
+        if not OPENROUTER_API_KEY:
+            logger.warning("OPENROUTER_API_KEY not set, cannot analyze market")
+            return None
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.post(ANTHROPIC_API_URL, headers=headers, json=data, timeout=60) as resp:
+                async with session.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "xiaomi/mimo-v2-flash:free",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": 800
+                    },
+                    timeout=60
+                ) as resp:
                     if resp.status == 200:
                         result = await resp.json()
-                        text = result.get("content", [{}])[0].get("text", "")
+                        text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
                         # Parse JSON response
                         try:
                             # Clean up potential markdown
@@ -876,21 +893,30 @@ GOOD reasons: "Trump leads RCP avg by 3.2pts", "Fed signaled March cut", "deadli
                                             break
                                 text = text[start_idx:end_idx+1]
                             analysis = json.loads(text.strip())
-                            logger.info(f"AI analysis: signal={analysis.get('signal')}, confidence={analysis.get('confidence')}")
+                            logger.info(f"AI analysis (Xiaomi): signal={analysis.get('signal')}, confidence={analysis.get('confidence')}")
                             return analysis
                         except json.JSONDecodeError as e:
                             logger.warning(f"JSON parse error: {e}, raw: {text[:500]}")
-                            # Fallback: extract what we can
+                            # Try to extract signal from text
+                            text_lower = text.lower()
+                            yes_pos = text_lower.find('"signal": "yes"') if '"signal": "yes"' in text_lower else 999
+                            no_pos = text_lower.find('"signal": "no"') if '"signal": "no"' in text_lower else 999
+                            signal = "yes" if yes_pos < no_pos else "no"
+                            # Extract reasons using regex
+                            import re
+                            reasons = re.findall(r'"([^"]{15,60})"', text)[:3]
+                            if not reasons:
+                                reasons = ["AI provided unstructured analysis"]
                             return {
-                                "signal": "yes" if yes_odds > 50 else "no",
+                                "signal": signal,
                                 "confidence": "low",
-                                "reasons": ["AI analysis parsing failed"],
-                                "main_risk": "analysis uncertainty",
+                                "reasons": reasons,
+                                "main_risk": "analysis format uncertain",
                                 "notes": ""
                             }
                     else:
                         error = await resp.text()
-                        logger.error(f"Anthropic API error: {resp.status} - {error[:200]}")
+                        logger.error(f"Xiaomi/OpenRouter API error: {resp.status} - {error[:200]}")
         except Exception as e:
             logger.error(f"AI analysis error: {e}")
         return None
@@ -1238,18 +1264,9 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
         top_options=market.get('top_options')
     )
     if not analysis:
-        # Fallback for multi-outcome vs binary
-        if market.get('is_multi_outcome') and market.get('top_options'):
-            signal = market['top_options'][0][0]  # Pick the leader
-        else:
-            signal = "yes" if market['yes_odds'] > 50 else "no"
-        analysis = {
-            "signal": signal,
-            "confidence": "low",
-            "reasons": ["market dynamics favor this outcome"],
-            "main_risk": "unexpected developments",
-            "notes": ""
-        }
+        # Don't post without proper AI analysis
+        logger.warning(f"[{agent_id}] AI analysis failed, skipping post")
+        return None
     # Create thread of tweets
     thread_tweets = create_tweet_thread(agent, market, analysis)
     logger.info(f"[{agent_id}] Posting thread with {len(thread_tweets)} tweets...")
@@ -2014,6 +2031,8 @@ class APIServer:
         self.user_trade_cache = TTLCache(ttl_seconds=300, max_size=10000)
         # Cache for token balance checks (5 min TTL)
         self.token_balance_cache = TTLCache(ttl_seconds=300, max_size=1000)
+        # Cache for market research/context (1 hour TTL) - saves FactsAI credits
+        self.research_cache = TTLCache(ttl_seconds=3600, max_size=500)
         # Active sessions (wallet -> session data)
         self.sessions = {}
         self._load_sessions()
@@ -2319,6 +2338,7 @@ class APIServer:
         self.app.router.add_post("/api/watchlist/{user_id}", self.update_watchlist)
         self.app.router.add_get("/api/events", self.get_events)
         self.app.router.add_get("/api/dome/events", self.get_dome_events)  # Dome API integration
+        self.app.router.add_get("/api/kalshi-events", self.get_dome_events)  # Alias for Kalshi
         self.app.router.add_get("/api/new-markets", self.get_new_markets)
         self.app.router.add_get("/api/arbitrage", self.get_arbitrage)
         self.app.router.add_get("/api/alerts", self.get_alerts)
@@ -2547,6 +2567,11 @@ class APIServer:
     async def get_events(self, request):
         """Proxy to Polymarket API with Builders key - fetches events sequentially"""
         import aiohttp
+
+        # If platform=kalshi, redirect to dome events
+        platform = request.query.get('platform', 'polymarket').lower()
+        if platform == 'kalshi':
+            return await self.get_dome_events(request)
 
         limit = int(request.query.get('limit', '5000'))
         sort = request.query.get('sort', 'createdAt')  # createdAt, volume, startDate
@@ -2982,8 +3007,23 @@ class APIServer:
         if not slug and not title:
             return web.json_response({"success": False, "error": "No slug or title provided"}, status=400)
 
+        # Block updown markets - they change every 5-15 mins, research is useless
+        combined = (slug + title).lower()
+        if 'updown' in combined or 'up/down' in combined:
+            return web.json_response({
+                "success": False,
+                "error": "AI analysis not available for Up/Down markets (prices change too quickly)"
+            }, status=400)
+
         # If we have slug but no title, try to get title from the slug
         search_term = title if title else slug.replace('-', ' ')
+
+        # Check cache first (saves FactsAI credits)
+        cache_key = f"polymarket:{slug or search_term}"
+        cached = self.research_cache.get(cache_key)
+        if cached:
+            logger.info(f"[Polymarket] Cache hit for: {cache_key[:50]}")
+            return web.json_response({"success": True, "context": cached, "source": "cache"})
 
         OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 
@@ -3071,6 +3111,8 @@ RULES:
                             context = message.get('content', '')
 
                             if context:
+                                # Save to cache (1 hour TTL)
+                                self.research_cache.set(cache_key, context)
                                 return web.json_response({
                                     "success": True,
                                     "context": context,
@@ -3086,6 +3128,8 @@ RULES:
                     clean_research = facts_research[:800].strip()
                     if len(facts_research) > 800:
                         clean_research += "..."
+                    # Save to cache
+                    self.research_cache.set(cache_key, clean_research)
                     return web.json_response({
                         "success": True,
                         "context": clean_research,
@@ -3121,6 +3165,21 @@ RULES:
 
         if not title:
             return web.json_response({"success": False, "error": "No market title provided"}, status=400)
+
+        # Block updown markets - they change every 5-15 mins, research is useless
+        combined = (title + ticker).lower()
+        if 'updown' in combined or 'up/down' in combined:
+            return web.json_response({
+                "success": False,
+                "error": "AI analysis not available for Up/Down markets (prices change too quickly)"
+            }, status=400)
+
+        # Check cache first (saves FactsAI credits)
+        cache_key = f"kalshi:{ticker or title}"
+        cached = self.research_cache.get(cache_key)
+        if cached:
+            logger.info(f"[Kalshi] Cache hit for: {cache_key[:50]}")
+            return web.json_response({"success": True, "context": cached, "source": "cache"})
 
         OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', '')
 
@@ -3208,6 +3267,8 @@ RULES:
                             context = message.get('content', '')
 
                             if context:
+                                # Save to cache (1 hour TTL)
+                                self.research_cache.set(cache_key, context)
                                 return web.json_response({
                                     "success": True,
                                     "context": context,
@@ -3223,6 +3284,8 @@ RULES:
                     clean_research = facts_research[:800].strip()
                     if len(facts_research) > 800:
                         clean_research += "..."
+                    # Save to cache
+                    self.research_cache.set(cache_key, clean_research)
                     return web.json_response({
                         "success": True,
                         "context": clean_research,
@@ -4810,12 +4873,20 @@ RULES:
         agent_runner_state["last_agent_post"][agent_id] = 0
 
         scanner = PolymarketScanner()
-        result = await process_agent_posting(agent_id, agent, scanner, self)
+        try:
+            result = await process_agent_posting(agent_id, agent, scanner, self)
 
-        if result:
-            return web.json_response({"success": True, "message": "Post published successfully"})
-        else:
-            return web.json_response({"success": False, "message": "Failed to post, check logs"}, status=500)
+            if result:
+                return web.json_response({"success": True, "message": "Post published successfully"})
+            elif result is None:
+                return web.json_response({"success": False, "message": "AI analysis failed - check OPENROUTER_API_KEY and FACTSAI_API_KEY"}, status=500)
+            else:
+                return web.json_response({"success": False, "message": "No valid markets or posting failed"}, status=500)
+        except Exception as e:
+            logger.error(f"[{agent_id}] Post error: {e}")
+            import traceback
+            traceback.print_exc()
+            return web.json_response({"success": False, "message": f"Error: {str(e)}"}, status=500)
 
     async def launchpad_agent_test_oauth(self, request):
         """Test OAuth posting for an agent with detailed debug info"""
@@ -5269,6 +5340,19 @@ RULES:
             if not slug:
                 return web.json_response({"error": "Missing event slug"}, status=400)
 
+            # Block updown markets - they waste FactsAI credits
+            if 'updown' in slug.lower() or 'up/down' in slug.lower() or '-5m-' in slug.lower() or '-1h-' in slug.lower():
+                return web.json_response({
+                    "error": "AI analysis not available for Up/Down markets (prices change too quickly)"
+                }, status=400)
+
+            # Check cache first (saves FactsAI credits)
+            cache_key = f"research:polymarket:{slug}"
+            cached = self.research_cache.get(cache_key)
+            if cached:
+                logger.info(f"[Polymarket Research] Cache hit for: {slug[:50]}")
+                return web.json_response(cached)
+
             async with aiohttp.ClientSession() as session:
                 # Fetch event from Polymarket API
                 async with session.get(
@@ -5307,32 +5391,9 @@ RULES:
                         "liquidity": float(m.get("liquidity", 0))
                     })
 
-                # Get research from FactsAI
+                # DISABLED: FactsAI for research page - prevents credit drain
+                # FactsAI only used for: agents, explicit "get context" button clicks
                 facts_research = ""
-                if FACTSAI_API_KEY:
-                    try:
-                        logger.info(f"[Polymarket Research] Fetching FactsAI for: {title[:50]}...")
-                        async with session.post(
-                            FACTSAI_API_URL,
-                            headers={
-                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "query": f"Latest news and analysis about: {title}. Include recent events and probability factors.",
-                                "text": True
-                            },
-                            timeout=aiohttp.ClientTimeout(total=30)
-                        ) as resp:
-                            if resp.status == 200:
-                                result = await resp.json()
-                                if result.get("success") and result.get("data"):
-                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
-                                    if isinstance(facts_research, dict):
-                                        facts_research = facts_research.get("text", str(facts_research))
-                                    logger.info(f"[Polymarket Research] Got FactsAI: {len(facts_research)} chars")
-                    except Exception as e:
-                        logger.warning(f"[Polymarket Research] FactsAI error: {e}")
 
                 # Generate analysis with Xiaomi
                 analysis = None
@@ -5383,11 +5444,14 @@ Use lowercase. Be concise and actionable. No markdown headers."""
                     except Exception as e:
                         logger.error(f"[Polymarket Research] Xiaomi error: {e}")
 
-                return web.json_response({
+                # Cache the result (1 hour TTL)
+                response_data = {
                     "success": True,
                     "event": event,
                     "analysis": analysis.strip() if analysis else "analysis unavailable"
-                })
+                }
+                self.research_cache.set(cache_key, response_data)
+                return web.json_response(response_data)
 
         except Exception as e:
             logger.error(f"research_get_event error: {e}")
@@ -5402,6 +5466,20 @@ Use lowercase. Be concise and actionable. No markdown headers."""
             ticker = request.match_info.get('ticker', '').upper()
             if not ticker:
                 return web.json_response({"error": "Missing market ticker"}, status=400)
+
+            # Block updown markets - they waste FactsAI credits
+            ticker_lower_check = ticker.lower()
+            if 'updown' in ticker_lower_check or 'up/down' in ticker_lower_check or '-5m-' in ticker_lower_check or '-1h-' in ticker_lower_check:
+                return web.json_response({
+                    "error": "AI analysis not available for Up/Down markets (prices change too quickly)"
+                }, status=400)
+
+            # Check cache first (saves FactsAI credits)
+            cache_key = f"research:kalshi:{ticker}"
+            cached = self.research_cache.get(cache_key)
+            if cached:
+                logger.info(f"[Kalshi Research] Cache hit for: {ticker[:50]}")
+                return web.json_response(cached)
 
             # Extract URL path from ticker
             # Ticker format: KXNFLGAME-26JAN10LACAR
@@ -5541,32 +5619,9 @@ Use lowercase. Be concise and actionable. No markdown headers."""
                 volume = market_data.get("volume", 0) or 0
                 status = market_data.get("status", "open")
 
-                # Get research from FactsAI
+                # DISABLED: FactsAI for research page - prevents credit drain
+                # FactsAI only used for: agents, explicit "get context" button clicks
                 facts_research = ""
-                if FACTSAI_API_KEY:
-                    try:
-                        logger.info(f"[Kalshi Research] Fetching FactsAI for: {title[:50]}...")
-                        async with session.post(
-                            FACTSAI_API_URL,
-                            headers={
-                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "query": f"Latest news and analysis about: {title}. Include recent events and probability factors.",
-                                "text": True
-                            },
-                            timeout=aiohttp.ClientTimeout(total=30)
-                        ) as resp:
-                            if resp.status == 200:
-                                result = await resp.json()
-                                if result.get("success") and result.get("data"):
-                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
-                                    if isinstance(facts_research, dict):
-                                        facts_research = facts_research.get("text", str(facts_research))
-                                    logger.info(f"[Kalshi Research] Got FactsAI: {len(facts_research)} chars")
-                    except Exception as e:
-                        logger.warning(f"[Kalshi Research] FactsAI error: {e}")
 
                 # Generate analysis with Xiaomi
                 analysis = None
@@ -5615,7 +5670,8 @@ Use lowercase. Be concise and actionable."""
                     except Exception as e:
                         logger.error(f"[Kalshi Research] Xiaomi error: {e}")
 
-                return web.json_response({
+                # Cache the result (1 hour TTL)
+                response_data = {
                     "success": True,
                     "market": {
                         "title": title,
@@ -5627,7 +5683,9 @@ Use lowercase. Be concise and actionable."""
                         "close_time": market_data.get("close_time") or market_data.get("expiration_time")
                     },
                     "analysis": analysis or "analysis unavailable"
-                })
+                }
+                self.research_cache.set(cache_key, response_data)
+                return web.json_response(response_data)
 
         except Exception as e:
             logger.error(f"research_get_kalshi error: {e}")
@@ -5835,34 +5893,41 @@ Keep response concise (2-3 sentences max). Use lowercase. Be friendly but profes
                     })
 
                 # Step 3: Market search - get research from FactsAI
-                keywords = classification.get("keywords", [question])
-                search_term = " ".join(keywords) if keywords else question
+                raw_keywords = classification.get("keywords", [question])
 
+                # Filter out common/generic words that match everything
+                stopwords = {"market", "markets", "prediction", "predictions", "top", "best", "what",
+                            "are", "the", "is", "a", "an", "and", "or", "for", "in", "on", "to",
+                            "about", "trending", "hot", "popular", "current", "latest", "find", "show"}
+                keywords = [kw for kw in raw_keywords if kw.lower() not in stopwords and len(kw) > 2]
+
+                # If all keywords were filtered out, use the original question words
+                if not keywords:
+                    keywords = [w for w in question.split() if w.lower() not in stopwords and len(w) > 2][:3]
+
+                search_term = " ".join(keywords) if keywords else question
+                logger.info(f"[Research] Filtered keywords: {keywords}")
+
+                # Block updown queries - they waste FactsAI credits
+                search_lower = search_term.lower()
+                if 'updown' in search_lower or 'up/down' in search_lower or 'up or down' in search_lower:
+                    return web.json_response({
+                        "success": True,
+                        "markets": [],
+                        "analysis": None,
+                        "answer": "i don't analyze up/down markets - their prices change every few minutes so the analysis would be outdated by the time you read it. try asking about longer-term markets instead!"
+                    })
+
+                # Check cache first (saves FactsAI credits)
+                cache_key = f"research:ask:{search_term[:100]}"
+                cached = self.research_cache.get(cache_key)
+                if cached:
+                    logger.info(f"[Research] Cache hit for: {search_term[:50]}")
+                    return web.json_response(cached)
+
+                # FactsAI ПОЛНОСТЬЮ ОТКЛЮЧЕН для research - юзают боты/спамеры
+                # Только Xiaomi (бесплатный) для чата
                 facts_research = ""
-                if FACTSAI_API_KEY:
-                    try:
-                        logger.info(f"[Research] Fetching FactsAI for: {search_term[:50]}...")
-                        async with session.post(
-                            FACTSAI_API_URL,
-                            headers={
-                                "Authorization": f"Bearer {FACTSAI_API_KEY}",
-                                "Content-Type": "application/json"
-                            },
-                            json={
-                                "query": f"Latest prediction market news, odds, and analysis about: {search_term}. Include Polymarket and Kalshi markets if relevant.",
-                                "text": True
-                            },
-                            timeout=aiohttp.ClientTimeout(total=30)
-                        ) as resp:
-                            if resp.status == 200:
-                                result = await resp.json()
-                                if result.get("success") and result.get("data"):
-                                    facts_research = result["data"].get("answer", "") or result["data"].get("text", "")
-                                    if isinstance(facts_research, dict):
-                                        facts_research = facts_research.get("text", str(facts_research))
-                                    logger.info(f"[Research] Got FactsAI: {len(facts_research)} chars")
-                    except Exception as e:
-                        logger.warning(f"[Research] FactsAI error: {e}")
 
                 # Step 4: Fetch markets from Polymarket
                 markets = []
@@ -5911,6 +5976,20 @@ Keep response concise (2-3 sentences max). Use lowercase. Be friendly but profes
                                 key=lambda x: float(x.get("volume", 0)),
                                 reverse=True
                             )[:10]
+
+                            # If no filtered markets found, get top by volume as fallback
+                            if not sorted_markets:
+                                logger.info(f"[Research] No keyword matches, showing top volume markets")
+                                all_active = []
+                                for event in all_events:
+                                    for m in event.get("markets", []):
+                                        if not m.get("closed") and not m.get("resolved"):
+                                            all_active.append(m)
+                                sorted_markets = sorted(
+                                    all_active,
+                                    key=lambda x: float(x.get("volume", 0)),
+                                    reverse=True
+                                )[:10]
 
                             for m in sorted_markets:
                                 outcomes = m.get("outcomes", "[]")
@@ -5986,15 +6065,33 @@ If no relevant markets found, explain what you know from research and suggest re
                                 result = await resp.json()
                                 analysis = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                                 logger.info(f"[Research] Final answer: {len(analysis)} chars")
+                            else:
+                                error_text = await resp.text()
+                                logger.error(f"[Research] Xiaomi API error {resp.status}: {error_text[:300]}")
                     except Exception as e:
                         logger.error(f"[Research] Final answer error: {e}")
 
-                return web.json_response({
+                # Fallback analysis from market data if AI failed
+                if not analysis and markets:
+                    market_lines = []
+                    for m in markets[:3]:
+                        q = m.get('question', '')[:50]
+                        outcomes = m.get('outcomes', [])
+                        prices = m.get('prices', [])
+                        if outcomes and prices:
+                            top_price = float(prices[0]) * 100
+                            market_lines.append(f"• {q}... ({top_price:.0f}% yes)")
+                    analysis = "here are the top markets:\n\n" + "\n".join(market_lines) + "\n\nask about a specific topic for deeper analysis."
+
+                # Cache the result (1 hour TTL)
+                response_data = {
                     "success": True,
                     "markets": markets[:5] if markets else [],
-                    "analysis": analysis.strip() if analysis else "couldn't generate analysis. please try again.",
+                    "analysis": analysis.strip() if analysis else "no markets found for this query. try asking about a different topic.",
                     "answer": analysis.strip() if analysis and not markets else None
-                })
+                }
+                self.research_cache.set(cache_key, response_data)
+                return web.json_response(response_data)
 
         except Exception as e:
             logger.error(f"research_ask_question error: {e}")
