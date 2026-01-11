@@ -1252,7 +1252,7 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
             valid_markets.append(market_data)
     if not valid_markets:
         logger.info(f"[{agent_id}] No valid markets found for niche '{niche}'")
-        return False
+        return "NO_MARKETS"
     top_markets = sorted(valid_markets, key=lambda x: x['volume'], reverse=True)[:10]
     logger.info(f"[{agent_id}] Top 10 markets: {[m['title'][:40] for m in top_markets]}")
     market = random.choice(top_markets)
@@ -1344,7 +1344,7 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
                         agent_runner_state["last_agent_post"] = {}
                     agent_runner_state["last_agent_post"][agent_id] = time.time()
                     return True
-        return False
+        return "POST_FAILED"
 
 async def process_agent_mentions(agent_id: str, agent: Dict, server: 'PolydictionsServer' = None) -> int:
     username = agent.get("twitter_username")
@@ -4877,12 +4877,16 @@ RULES:
         try:
             result = await process_agent_posting(agent_id, agent, scanner, self)
 
-            if result:
+            if result is True:
                 return web.json_response({"success": True, "message": "Post published successfully"})
             elif result is None:
                 return web.json_response({"success": False, "message": "AI analysis failed - check OPENROUTER_API_KEY and FACTSAI_API_KEY"}, status=500)
+            elif result == "NO_MARKETS":
+                return web.json_response({"success": False, "message": "No valid markets found (all filtered or already posted)"}, status=400)
+            elif result == "POST_FAILED":
+                return web.json_response({"success": False, "message": "Twitter API posting failed - check OAuth token"}, status=500)
             else:
-                return web.json_response({"success": False, "message": "No valid markets or posting failed"}, status=500)
+                return web.json_response({"success": False, "message": f"Unknown error: {result}"}, status=500)
         except Exception as e:
             logger.error(f"[{agent_id}] Post error: {e}")
             import traceback
