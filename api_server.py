@@ -2382,6 +2382,7 @@ class APIServer:
         self.app.router.add_get("/api/pump-token/{mint}", self.pump_token_proxy)  # Proxy pump.fun API
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/refresh", self.launchpad_agent_refresh)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/post", self.launchpad_agent_trigger_post)
+        self.app.router.add_get("/api/launchpad/agents/{agent_id}/debug-post", self.launchpad_agent_debug_post)
         self.app.router.add_post("/api/launchpad/agents/{agent_id}/test-oauth", self.launchpad_agent_test_oauth)
         self.app.router.add_get("/api/launchpad/agents/{agent_id}/reauth", self.launchpad_agent_reauth)
         self.app.router.add_post("/api/agents/start-manual", self.start_agent_manual)
@@ -4887,6 +4888,97 @@ RULES:
             import traceback
             traceback.print_exc()
             return web.json_response({"success": False, "message": f"Error: {str(e)}"}, status=500)
+
+    async def launchpad_agent_debug_post(self, request):
+        """Debug endpoint to trace posting flow step by step"""
+        agent_id = request.match_info.get('agent_id')
+        debug = {"agent_id": agent_id, "steps": []}
+
+        if agent_id not in running_agents:
+            debug["error"] = "Agent not found"
+            return web.json_response({"success": False, "debug": debug}, status=404)
+
+        agent = running_agents[agent_id]
+        debug["agent_username"] = agent.get("twitter_username")
+        debug["niche"] = agent.get("agent_niche", "general")
+
+        # Step 1: Check credentials
+        has_oauth = agent.get("x_access_token") and time.time() < agent.get("x_token_expires_at", 0)
+        debug["has_oauth"] = has_oauth
+        debug["has_cookie"] = bool(agent.get("twitter_cookie"))
+        debug["steps"].append(f"1. OAuth valid: {has_oauth}")
+
+        if not has_oauth and not agent.get("twitter_cookie"):
+            debug["error"] = "No valid credentials"
+            return web.json_response({"success": False, "debug": debug}, status=400)
+
+        # Step 2: Fetch markets
+        scanner = PolymarketScanner()
+        events = await scanner.fetch_events(limit=100)
+        debug["total_events"] = len(events)
+        debug["steps"].append(f"2. Fetched {len(events)} events from Polymarket")
+
+        # Step 3: Filter by niche
+        niche = agent.get("agent_niche", "general")
+        events = scanner.filter_by_niche(events, niche)
+        debug["events_after_niche_filter"] = len(events)
+        debug["steps"].append(f"3. After niche filter: {len(events)} events")
+
+        # Step 4: Filter valid markets
+        posted_events = agent_runner_state["posted_events"].get(agent_id, set())
+        valid_markets = []
+        for event in events:
+            if scanner.is_valid_market(event, posted_events):
+                market_data = scanner.parse_market_data(event)
+                valid_markets.append(market_data)
+        debug["valid_markets"] = len(valid_markets)
+        debug["market_titles"] = [m["title"][:50] for m in valid_markets[:5]]
+        debug["steps"].append(f"4. Valid markets: {len(valid_markets)}")
+
+        if not valid_markets:
+            debug["error"] = "No valid markets found"
+            return web.json_response({"success": False, "debug": debug})
+
+        # Step 5: Select market
+        market = random.choice(sorted(valid_markets, key=lambda x: x['volume'], reverse=True)[:10])
+        debug["selected_market"] = market["title"][:60]
+        debug["steps"].append(f"5. Selected: {market['title'][:50]}...")
+
+        # Step 6: AI Analysis
+        analysis = await AIAnalyzer.analyze_market(
+            market['title'], market['yes_odds'], market['no_odds'], market['volume'],
+            custom_prompt=agent.get("custom_prompt", ""), niche=niche,
+            is_multi=market.get('is_multi_outcome', False),
+            top_options=market.get('top_options')
+        )
+        debug["ai_analysis"] = analysis
+        if analysis:
+            debug["steps"].append(f"6. AI analysis: signal={analysis.get('signal')}, confidence={analysis.get('confidence')}")
+        else:
+            debug["error"] = "AI analysis failed"
+            debug["steps"].append("6. AI analysis FAILED")
+            return web.json_response({"success": False, "debug": debug})
+
+        # Step 7: Create tweet thread
+        thread_tweets = create_tweet_thread(agent, market, analysis)
+        debug["tweet_count"] = len(thread_tweets)
+        debug["tweet_lengths"] = [len(t) for t in thread_tweets]
+        debug["steps"].append(f"7. Created {len(thread_tweets)} tweets, lengths: {[len(t) for t in thread_tweets]}")
+
+        # Step 8: Get OAuth token
+        valid_token = await self.get_valid_x_token(agent)
+        debug["got_valid_token"] = bool(valid_token)
+        debug["steps"].append(f"8. OAuth token: {'obtained' if valid_token else 'FAILED'}")
+
+        if not valid_token:
+            debug["error"] = "Failed to get OAuth token"
+            return web.json_response({"success": False, "debug": debug})
+
+        # Step 9: Post (dry run - just return debug info without actually posting)
+        debug["steps"].append("9. Ready to post (this is debug mode, not actually posting)")
+        debug["first_tweet_preview"] = thread_tweets[0][:200] if thread_tweets else None
+
+        return web.json_response({"success": True, "debug": debug, "message": "Debug complete - all steps passed"})
 
     async def launchpad_agent_test_oauth(self, request):
         """Test OAuth posting for an agent with detailed debug info"""
