@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY api_server.py .
+COPY quantish_users.py .
 COPY features/ ./features/
 
 # Expose port
