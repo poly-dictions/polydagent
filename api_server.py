@@ -41,6 +41,16 @@ DEV_MODE = os.getenv('DEV_MODE', 'false').lower() == 'true'
 POLYMARKET_BUILDERS_KEY = os.getenv('POLYMARKET_BUILDERS_KEY', '')
 DOME_API_KEY = os.getenv('DOME_API_KEY', '')
 
+# Quantish API Configuration (Polymarket + Kalshi trading via MCP)
+QUANTISH_DISCOVERY_URL = "https://quantish.live/mcp"
+QUANTISH_DISCOVERY_KEY = os.getenv('QUANTISH_DISCOVERY_KEY', 'qm_dyvSSGPYLcRwLXBNmW5VPa94sjCVAe-6')
+QUANTISH_POLYMARKET_URL = "https://quantish-sdk-production.up.railway.app/mcp"
+QUANTISH_POLYMARKET_KEY = os.getenv('QUANTISH_POLYMARKET_KEY', 'pk_live_VlF9heMyzdUjTnQ6Zn1FHIkRvo27o8sC')
+QUANTISH_POLYMARKET_WALLET = "0x52854f2515db4725fff19ef52417900e02ebd66e"
+QUANTISH_KALSHI_URL = "https://kalshi-mcp-production-7c2c.up.railway.app/mcp"
+QUANTISH_KALSHI_KEY = os.getenv('QUANTISH_KALSHI_KEY', 'pk_kalshi_pvttXePc4vzFj1tVPNG3i82a81qB_QE1')
+QUANTISH_KALSHI_WALLET = "9E4f7fDxKx9HANvkJJbu2sjnw68QAdm93PYQe5V1qKnM"
+
 # Session security
 SESSION_SECRET = os.getenv('SESSION_SECRET', '')
 if not SESSION_SECRET:
@@ -2021,6 +2031,187 @@ async def transfer_spl_tokens(token_mint: str, recipient_wallet: str, signer_key
         return None
 
 
+# =============================================================================
+# QUANTISH CLIENT (Polymarket + Kalshi Trading via MCP)
+# =============================================================================
+
+class QuantishClient:
+    """Client for Quantish MCP API - supports Discovery, Polymarket, and Kalshi trading"""
+
+    def __init__(self):
+        self.discovery_url = QUANTISH_DISCOVERY_URL
+        self.discovery_key = QUANTISH_DISCOVERY_KEY
+        self.polymarket_url = QUANTISH_POLYMARKET_URL
+        self.polymarket_key = QUANTISH_POLYMARKET_KEY
+        self.kalshi_url = QUANTISH_KALSHI_URL
+        self.kalshi_key = QUANTISH_KALSHI_KEY
+
+    async def _call_mcp(self, url: str, api_key: str, tool_name: str, arguments: dict) -> dict:
+        """Make a JSON-RPC call to MCP endpoint"""
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments
+            },
+            "id": 1
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+            "X-API-Key": api_key  # Capital X for Discovery API
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                # Handle both JSON and text responses
+                content_type = resp.headers.get('Content-Type', '')
+                if 'application/json' in content_type:
+                    data = await resp.json()
+                else:
+                    # Try to parse as JSON anyway
+                    text = await resp.text()
+                    try:
+                        data = json.loads(text)
+                    except:
+                        raise Exception(f"Invalid response: {text[:200]}")
+                
+                if "error" in data:
+                    raise Exception(data["error"].get("message", str(data["error"])))
+                result = data.get("result", {})
+                content = result.get("content", [])
+                if content and len(content) > 0:
+                    text = content[0].get("text", "{}")
+                    return json.loads(text)
+                return result
+
+    # === Discovery API ===
+    async def search_markets(self, query: str, platform: str = "all", limit: int = 10) -> dict:
+        """Search markets across Polymarket and Kalshi"""
+        return await self._call_mcp(
+            self.discovery_url, self.discovery_key,
+            "search_markets",
+            {"query": query, "platform": platform, "limit": limit}
+        )
+
+    async def get_trending_markets(self, platform: str = "all", limit: int = 10) -> dict:
+        """Get trending markets by volume"""
+        return await self._call_mcp(
+            self.discovery_url, self.discovery_key,
+            "get_trending_markets",
+            {"platform": platform, "limit": limit}
+        )
+
+    async def get_market_details(self, platform: str, market_id: str) -> dict:
+        """Get detailed market info"""
+        return await self._call_mcp(
+            self.discovery_url, self.discovery_key,
+            "get_market_details",
+            {"platform": platform, "marketId": market_id}
+        )
+
+    # === Polymarket Trading ===
+    async def polymarket_get_balances(self) -> dict:
+        """Get USDC and MATIC balances for Polymarket wallet"""
+        return await self._call_mcp(
+            self.polymarket_url, self.polymarket_key,
+            "get_balances", {}
+        )
+
+    async def polymarket_get_positions(self) -> dict:
+        """Get current Polymarket positions"""
+        return await self._call_mcp(
+            self.polymarket_url, self.polymarket_key,
+            "get_positions", {}
+        )
+
+    async def polymarket_get_market(self, condition_id: str) -> dict:
+        """Get Polymarket market details"""
+        return await self._call_mcp(
+            self.polymarket_url, self.polymarket_key,
+            "get_market", {"conditionId": condition_id}
+        )
+
+    async def polymarket_place_order(self, token_id: str, condition_id: str, side: str, amount: float, price: float = None) -> dict:
+        """Place order on Polymarket
+        Args:
+            token_id: The token ID (clobTokenId for the outcome)
+            condition_id: The condition ID for the market
+            side: "BUY" or "SELL"
+            amount: Amount in USDC
+            price: Optional limit price (0-1), if not provided uses market order
+        """
+        args = {
+            "tokenId": token_id,
+            "conditionId": condition_id,
+            "side": side,
+            "amount": amount
+        }
+        if price is not None:
+            args["price"] = price
+        return await self._call_mcp(
+            self.polymarket_url, self.polymarket_key,
+            "place_order", args
+        )
+
+    # === Kalshi Trading ===
+    async def kalshi_get_balances(self) -> dict:
+        """Get SOL and USDC balances for Kalshi wallet"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_get_balances", {}
+        )
+
+    async def kalshi_get_positions(self) -> dict:
+        """Get current Kalshi positions"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_get_positions", {}
+        )
+
+    async def kalshi_get_market(self, ticker: str) -> dict:
+        """Get Kalshi market details"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_get_market", {"ticker": ticker}
+        )
+
+    async def kalshi_check_market_initialization(self, ticker: str) -> dict:
+        """Check if Kalshi market is initialized on DFlow and get mint addresses"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_check_market_initialization", {"ticker": ticker}
+        )
+
+    async def kalshi_buy_yes(self, market_ticker: str, yes_outcome_mint: str, usdc_amount: float) -> dict:
+        """Buy YES on Kalshi market"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_buy_yes",
+            {"marketTicker": market_ticker, "yesOutcomeMint": yes_outcome_mint, "usdcAmount": usdc_amount}
+        )
+
+    async def kalshi_buy_no(self, market_ticker: str, no_outcome_mint: str, usdc_amount: float) -> dict:
+        """Buy NO on Kalshi market"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_buy_no",
+            {"marketTicker": market_ticker, "noOutcomeMint": no_outcome_mint, "usdcAmount": usdc_amount}
+        )
+
+    async def kalshi_sell_position(self, outcome_mint: str, token_amount: float) -> dict:
+        """Sell Kalshi position"""
+        return await self._call_mcp(
+            self.kalshi_url, self.kalshi_key,
+            "kalshi_sell_position",
+            {"outcomeMint": outcome_mint, "tokenAmount": token_amount}
+        )
+
+# Global Quantish client instance
+quantish_client = QuantishClient()
+
+
 class APIServer:
     def __init__(self, host: str = "0.0.0.0", port: int = None):
         import os
@@ -2332,6 +2523,438 @@ class APIServer:
             logger.error(f"Error testing Pandora market: {e}")
             return web.json_response({"error": str(e)}, status=500)
 
+    # =========================================================================
+    # QUANTISH TRADING API METHODS
+    # =========================================================================
+
+    async def quantish_search(self, request):
+        """Search markets via Quantish Discovery API"""
+        try:
+            query = request.query.get('q', '')
+            platform = request.query.get('platform', 'all')
+            limit = int(request.query.get('limit', 10))
+
+            if not query:
+                return web.json_response({"error": "Query parameter 'q' required"}, status=400)
+
+            result = await quantish_client.search_markets(query, platform, limit)
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish search error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_trending(self, request):
+        """Get trending markets via Quantish Discovery API"""
+        try:
+            platform = request.query.get('platform', 'all')
+            limit = int(request.query.get('limit', 10))
+
+            result = await quantish_client.get_trending_markets(platform, limit)
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish trending error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_market_details(self, request):
+        """Get market details via Quantish Discovery API"""
+        try:
+            platform = request.query.get('platform', '')
+            market_id = request.query.get('id', '')
+
+            if not platform or not market_id:
+                return web.json_response({"error": "Parameters 'platform' and 'id' required"}, status=400)
+
+            result = await quantish_client.get_market_details(platform, market_id)
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish market details error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_balances(self, request):
+        """Get wallet balances for both Polymarket and Kalshi"""
+        try:
+            platform = request.query.get('platform', 'all')
+
+            result = {}
+            if platform in ['all', 'polymarket']:
+                try:
+                    result['polymarket'] = await quantish_client.polymarket_get_balances()
+                except Exception as e:
+                    result['polymarket'] = {"error": str(e)}
+
+            if platform in ['all', 'kalshi']:
+                try:
+                    result['kalshi'] = await quantish_client.kalshi_get_balances()
+                except Exception as e:
+                    result['kalshi'] = {"error": str(e)}
+
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish balances error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_positions(self, request):
+        """Get positions for both Polymarket and Kalshi"""
+        try:
+            platform = request.query.get('platform', 'all')
+
+            result = {}
+            if platform in ['all', 'polymarket']:
+                try:
+                    result['polymarket'] = await quantish_client.polymarket_get_positions()
+                except Exception as e:
+                    result['polymarket'] = {"error": str(e)}
+
+            if platform in ['all', 'kalshi']:
+                try:
+                    result['kalshi'] = await quantish_client.kalshi_get_positions()
+                except Exception as e:
+                    result['kalshi'] = {"error": str(e)}
+
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish positions error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_trade(self, request):
+        """Execute trade on Polymarket or Kalshi via Quantish"""
+        try:
+            data = await request.json()
+            platform = data.get('platform', '')
+            action = data.get('action', '')  # buy_yes, buy_no, sell
+            amount = float(data.get('amount', 0))
+
+            if not platform or not action or amount <= 0:
+                return web.json_response({
+                    "error": "Required: platform, action (buy_yes/buy_no/sell), amount > 0"
+                }, status=400)
+
+            result = {}
+
+            if platform == 'polymarket':
+                token_id = data.get('tokenId', '')
+                condition_id = data.get('conditionId', '')
+                if not token_id or not condition_id:
+                    return web.json_response({"error": "tokenId and conditionId required for Polymarket"}, status=400)
+
+                side = "BUY" if action in ['buy_yes', 'buy_no'] else "SELL"
+                price = data.get('price')  # Optional limit price
+                result = await quantish_client.polymarket_place_order(token_id, condition_id, side, amount, price)
+
+            elif platform == 'kalshi':
+                ticker = data.get('ticker', '')
+                if not ticker:
+                    return web.json_response({"error": "ticker required for Kalshi"}, status=400)
+
+                # Auto-fetch outcomeMint from market initialization check
+                yes_mint = data.get('yesMint', '')
+                no_mint = data.get('noMint', '')
+
+                if not yes_mint or not no_mint:
+                    # Check market initialization to get mint addresses
+                    try:
+                        init_info = await quantish_client.kalshi_check_market_initialization(ticker)
+                        yes_mint = init_info.get('yesMint', '') or init_info.get('yesOutcomeMint', '')
+                        no_mint = init_info.get('noMint', '') or init_info.get('noOutcomeMint', '')
+                        logger.info(f"Kalshi market {ticker}: yesMint={yes_mint}, noMint={no_mint}, initialized={init_info.get('isInitialized')}")
+                    except Exception as e:
+                        logger.error(f"Failed to check Kalshi market initialization: {e}")
+                        return web.json_response({"error": f"Could not check market initialization: {e}"}, status=500)
+
+                if action == 'buy_yes':
+                    if not yes_mint:
+                        return web.json_response({"error": "Could not find yesOutcomeMint for market"}, status=400)
+                    result = await quantish_client.kalshi_buy_yes(ticker, yes_mint, amount)
+                elif action == 'buy_no':
+                    if not no_mint:
+                        return web.json_response({"error": "Could not find noOutcomeMint for market"}, status=400)
+                    result = await quantish_client.kalshi_buy_no(ticker, no_mint, amount)
+                elif action == 'sell':
+                    outcome_mint = data.get('outcomeMint', '')
+                    if not outcome_mint:
+                        return web.json_response({"error": "outcomeMint required for sell"}, status=400)
+                    result = await quantish_client.kalshi_sell_position(outcome_mint, amount)
+                else:
+                    return web.json_response({"error": f"Unknown action: {action}"}, status=400)
+            else:
+                return web.json_response({"error": f"Unknown platform: {platform}"}, status=400)
+
+            return web.json_response({"success": True, "data": result})
+
+        except Exception as e:
+            logger.error(f"Quantish trade error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    async def quantish_wallets(self, request):
+        """Get wallet addresses for deposit"""
+        return web.json_response({
+            "success": True,
+            "data": {
+                "polymarket": {
+                    "address": QUANTISH_POLYMARKET_WALLET,
+                    "network": "Polygon",
+                    "currency": "USDC"
+                },
+                "kalshi": {
+                    "address": QUANTISH_KALSHI_WALLET,
+                    "network": "Solana",
+                    "currency": "USDC"
+                }
+            }
+        })
+
+    # =========================================================================
+    # QUANTISH MULTI-USER WALLET API
+    # =========================================================================
+    
+    async def quantish_create_user_wallet(self, request):
+        """Create wallet for user on Polymarket or Kalshi"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            platform = data.get('platform', 'polymarket')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            if platform == 'polymarket':
+                result = await quantish_users.create_polymarket_wallet(user_id)
+            elif platform == 'kalshi':
+                result = await quantish_users.create_kalshi_wallet(user_id)
+            else:
+                return web.json_response({"error": "platform must be 'polymarket' or 'kalshi'"}, status=400)
+            
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+            
+        except Exception as e:
+            logger.error(f"Create user wallet error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_get_user_wallet(self, request):
+        """Get user's wallet info"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            platform = request.query.get('platform', 'polymarket')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            wallet = quantish_users.get_user_wallet(user_id, platform)
+            if not wallet:
+                return web.json_response({"error": "Wallet not found"}, status=404)
+            
+            return web.json_response({"success": True, "data": wallet})
+            
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_user_balances(self, request):
+        """Get user's balances"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            platform = request.query.get('platform', 'polymarket')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            result = await quantish_users.get_balances(user_id, platform)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+            
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_user_positions(self, request):
+        """Get user's positions"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            platform = request.query.get('platform', 'polymarket')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            result = await quantish_users.get_positions(user_id, platform)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+            
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_user_trade(self, request):
+        """Execute trade for user"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            platform = data.get('platform', 'polymarket')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            # Remove userId and platform from kwargs
+            trade_args = {k: v for k, v in data.items() if k not in ['userId', 'platform']}
+            
+            result = await quantish_users.place_order(user_id, platform, **trade_args)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+            
+        except Exception as e:
+            logger.error(f"User trade error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_user_withdraw(self, request):
+        """Withdraw funds from user's wallet"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            platform = data.get('platform', 'polymarket')
+            to_address = data.get('toAddress', '')
+            amount = float(data.get('amount', 0))
+            token = data.get('token', 'USDC')
+            
+            if not user_id or not to_address or amount <= 0:
+                return web.json_response({"error": "userId, toAddress, and amount > 0 required"}, status=400)
+            
+            result = await quantish_users.transfer(user_id, platform, to_address, amount, token)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+            
+        except Exception as e:
+            logger.error(f"User withdraw error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+
+    # =========================================================================
+    # KALSHI-SPECIFIC USER API
+    # =========================================================================
+    
+    async def quantish_kalshi_search(self, request):
+        """Search Kalshi markets for user"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            query = request.query.get('q', '')
+            limit = int(request.query.get('limit', 10))
+            
+            if not user_id or not query:
+                return web.json_response({"error": "userId and q required"}, status=400)
+            
+            result = await quantish_users.kalshi_search_markets(user_id, query, limit)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_kalshi_market(self, request):
+        """Get Kalshi market details"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            ticker = request.query.get('ticker', '')
+            
+            if not user_id or not ticker:
+                return web.json_response({"error": "userId and ticker required"}, status=400)
+            
+            result = await quantish_users.kalshi_get_market(user_id, ticker)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_kalshi_quote(self, request):
+        """Get quote for Kalshi trade"""
+        from quantish_users import quantish_users
+        try:
+            user_id = request.query.get('userId', '')
+            ticker = request.query.get('ticker', '')
+            side = request.query.get('side', 'YES')
+            amount = float(request.query.get('amount', 1))
+            
+            if not user_id or not ticker:
+                return web.json_response({"error": "userId and ticker required"}, status=400)
+            
+            result = await quantish_users.kalshi_get_quote(user_id, ticker, side, amount)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_kalshi_buy(self, request):
+        """Buy on Kalshi market"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            ticker = data.get('ticker', '')
+            side = data.get('side', 'YES')
+            amount = float(data.get('amount', 0))
+            
+            if not user_id or not ticker or amount <= 0:
+                return web.json_response({"error": "userId, ticker, and amount > 0 required"}, status=400)
+            
+            result = await quantish_users.kalshi_buy(user_id, ticker, side, amount)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            logger.error(f"Kalshi buy error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_kalshi_sell(self, request):
+        """Sell Kalshi position"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            outcome_mint = data.get('outcomeMint', '')
+            token_amount = float(data.get('tokenAmount', 0))
+            
+            if not user_id or not outcome_mint or token_amount <= 0:
+                return web.json_response({"error": "userId, outcomeMint, and tokenAmount > 0 required"}, status=400)
+            
+            result = await quantish_users.kalshi_sell(user_id, outcome_mint, token_amount)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            logger.error(f"Kalshi sell error: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def quantish_kalshi_redeem(self, request):
+        """Redeem all winning Kalshi positions"""
+        from quantish_users import quantish_users
+        try:
+            data = await request.json()
+            user_id = data.get('userId', '')
+            
+            if not user_id:
+                return web.json_response({"error": "userId required"}, status=400)
+            
+            result = await quantish_users.kalshi_redeem(user_id)
+            if "error" in result:
+                return web.json_response(result, status=500)
+            return web.json_response({"success": True, "data": result})
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
     def setup_routes(self):
         # API routes
         self.app.router.add_get("/api/watchlist/{user_id}", self.get_watchlist)
@@ -2341,6 +2964,7 @@ class APIServer:
         self.app.router.add_get("/api/kalshi-events", self.get_dome_events)  # Alias for Kalshi
         self.app.router.add_get("/api/new-markets", self.get_new_markets)
         self.app.router.add_get("/api/arbitrage", self.get_arbitrage)
+        self.app.router.add_get("/api/pnp/markets", self.get_pnp_markets)  # PNP Exchange markets
         self.app.router.add_get("/api/alerts", self.get_alerts)
         self.app.router.add_get("/api/context", self.get_market_context)
         self.app.router.add_get("/api/kalshi/context", self.get_kalshi_context)  # Kalshi AI context
@@ -2355,6 +2979,23 @@ class APIServer:
         self.app.router.add_get("/api/pandora/status", self.get_pandora_status)
         self.app.router.add_get("/api/pandora/markets", self.get_pandora_markets)
         self.app.router.add_post("/api/pandora/test", self.test_pandora_market)
+
+        # Quantish Trading API (Polymarket + Kalshi via MCP)
+        self.app.router.add_get("/api/quantish/search", self.quantish_search)
+        self.app.router.add_get("/api/quantish/trending", self.quantish_trending)
+        self.app.router.add_get("/api/quantish/market", self.quantish_market_details)
+        self.app.router.add_get("/api/quantish/balances", self.quantish_balances)
+        self.app.router.add_get("/api/quantish/positions", self.quantish_positions)
+        self.app.router.add_post("/api/quantish/trade", self.quantish_trade)
+        self.app.router.add_get("/api/quantish/wallets", self.quantish_wallets)
+        
+        # Quantish Multi-User Wallet API
+        self.app.router.add_post("/api/quantish/user/create-wallet", self.quantish_create_user_wallet)
+        self.app.router.add_get("/api/quantish/user/wallet", self.quantish_get_user_wallet)
+        self.app.router.add_get("/api/quantish/user/balances", self.quantish_user_balances)
+        self.app.router.add_get("/api/quantish/user/positions", self.quantish_user_positions)
+        self.app.router.add_post("/api/quantish/user/trade", self.quantish_user_trade)
+        self.app.router.add_post("/api/quantish/user/withdraw", self.quantish_user_withdraw)
 
         self.app.router.add_options("/{path:.*}", self.handle_options)
 
@@ -2439,6 +3080,8 @@ class APIServer:
             self.app.router.add_get('/launchpad/projects/', lambda r: web.FileResponse(static_dir / 'launchpad' / 'projects' / 'index.html'))
             self.app.router.add_get('/research', lambda r: web.FileResponse(static_dir / 'research' / 'index.html'))
             self.app.router.add_get('/research/', lambda r: web.FileResponse(static_dir / 'research' / 'index.html'))
+            self.app.router.add_get('/pnp', lambda r: web.FileResponse(static_dir / 'pnp' / 'index.html'))
+            self.app.router.add_get('/pnp/', lambda r: web.FileResponse(static_dir / 'pnp' / 'index.html'))
 
             # Static assets
             self.app.router.add_static('/css', static_dir / 'css')
@@ -2991,6 +3634,176 @@ class APIServer:
             })
         except Exception as e:
             logger.error(f"Error getting arbitrage: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def get_pnp_markets(self, request):
+        """Fetch markets from PNP Exchange (Solana prediction markets)
+
+        Note: PNP uses client-side JS rendering. Their REST API is "coming soon".
+        Currently returning cached data from their explore page.
+        Live integration will use their Node.js SDK when partnership is established.
+        """
+        from datetime import datetime
+
+        try:
+            # Data scraped from https://pnp.exchange/explore
+            # PNP uses Supabase + Solana on-chain data loaded via JavaScript
+            # Their public API is not yet available, SDK requires Node.js
+            markets = [
+                {
+                    "id": "1",
+                    "title": "Will this tweet cross 500 likes? X {2009634148181496260}",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-3e4bdf09bd1f.jpg",
+                    "yesPrice": 0.71,
+                    "noPrice": 0.70,
+                    "volume": 3025,
+                    "endDate": "2026-01-14",
+                    "category": "twitter",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "2",
+                    "title": "Will Cam Little break the regular season NFL record for longest field goal in the 2025-2026 regular season?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-105eea802cc0.jpg",
+                    "yesPrice": 1.00,
+                    "noPrice": 0.04,
+                    "volume": 389,
+                    "endDate": "2026-01-11",
+                    "category": "sports",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "3",
+                    "title": "Will Bitcoin flip Gold in MarketCap by the end of March 2026?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-9853a54ea071.jpg",
+                    "yesPrice": 0.16,
+                    "noPrice": 0.99,
+                    "volume": 150,
+                    "endDate": "2026-03-30",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "4",
+                    "title": "Will Sydney Sweeney appear in GTA VI commercial before launch?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-ff035e9ed1e6.jpg",
+                    "yesPrice": 0.05,
+                    "noPrice": 1.00,
+                    "volume": 50,
+                    "endDate": "2026-11-06",
+                    "category": "other",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "5",
+                    "title": "Will the $TROLL token reach a $250 million market cap in August 2025?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-eb4419bd5d2d.jpg",
+                    "yesPrice": 0.82,
+                    "noPrice": 0.59,
+                    "volume": 37,
+                    "endDate": "2025-09-02",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "6",
+                    "title": "Will the Bonk ecosystem lose more than 50% of its value by January 1st 2026?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-cd1fc7136771.jpg",
+                    "yesPrice": 0.21,
+                    "noPrice": 0.99,
+                    "volume": 28,
+                    "endDate": "2026-01-01",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "7",
+                    "title": "Will the price of SOL increase by 20% in the next 10 hours?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-c02198fb3626.jpg",
+                    "yesPrice": 0.17,
+                    "noPrice": 0.99,
+                    "volume": 22,
+                    "endDate": "2025-10-01",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "8",
+                    "title": "Will Grand Theft Auto VI sell more than 10 million units worldwide before 31st July 2026?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-f373971b9f3b.jpg",
+                    "yesPrice": 1.00,
+                    "noPrice": 0.09,
+                    "volume": 21,
+                    "endDate": "2026-07-31",
+                    "category": "other",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "9",
+                    "title": "Will MrBeast raise $40M for clean water by August 31?",
+                    "image": None,
+                    "yesPrice": 0.50,
+                    "noPrice": 0.50,
+                    "volume": 21,
+                    "endDate": "2026-08-31",
+                    "category": "youtube",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "10",
+                    "title": "Will this song cross 150 million views? (YouTube)",
+                    "image": None,
+                    "yesPrice": 0.89,
+                    "noPrice": 0.45,
+                    "volume": 16,
+                    "endDate": "2026-01-15",
+                    "category": "youtube",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "11",
+                    "title": "Will Solana-based Bitcoin Layer 2 solutions account for more than 50% of total BTC L2 TVL on December 31, 2026?",
+                    "image": "https://ellmgkaclgqqszcknhrg.supabase.co/storage/v1/object/public/market-images/test_user_123/image-01660e3ec9ca.jpg",
+                    "yesPrice": 0.79,
+                    "noPrice": 0.62,
+                    "volume": 12,
+                    "endDate": "2026-12-31",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                },
+                {
+                    "id": "12",
+                    "title": "Will the $TROLL token reach a $100 million market cap in August 2025?",
+                    "image": None,
+                    "yesPrice": 1.00,
+                    "noPrice": 0.16,
+                    "volume": 11,
+                    "endDate": "2025-09-02",
+                    "category": "crypto",
+                    "url": "https://pnp.exchange/explore"
+                }
+            ]
+
+            # Calculate stats
+            total_volume = sum(m['volume'] for m in markets)
+            today = datetime.now().strftime('%Y-%m-%d')
+            active_count = len([m for m in markets if m['endDate'] and m['endDate'] > today])
+
+            return web.json_response({
+                "success": True,
+                "markets": markets,
+                "stats": {
+                    "total_volume": round(total_volume, 2),
+                    "total_markets": len(markets),
+                    "active_markets": active_count
+                },
+                "source": "pnp_exchange",
+                "note": "Cached data. Live API integration pending PNP public API release.",
+                "last_updated": "2026-01-11"
+            })
+
+        except Exception as e:
+            logger.error(f"Error fetching PNP markets: {e}")
             return web.json_response({"success": False, "error": str(e)}, status=500)
 
     async def get_market_context(self, request):

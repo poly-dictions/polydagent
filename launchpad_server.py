@@ -304,7 +304,11 @@ class TwitterAPI:
 
 class PolymarketScanner:
     """Scan Polymarket for opportunities filtered by niche"""
-    SPAM_WORDS = ['up or down', 'higher or lower', 'above or below', 'am-', 'pm-', 'am et', 'pm et', ':00', ':15', ':30', ':45']
+    SPAM_WORDS = [
+        'up or down', 'higher or lower', 'above or below', 'updown', 'up/down',
+        'am-', 'pm-', 'am et', 'pm et', ':00', ':15', ':30', ':45',
+        '5m', '15m', '1h', '4h'  # Short timeframe markets waste FactsAI credits
+    ]
 
     async def fetch_events(self, limit: int = 100) -> List[Dict]:
         """Fetch events sorted by volume"""
@@ -592,7 +596,11 @@ async def process_agent_posting(agent_id: str, agent: Dict, scanner: PolymarketS
         market['title'], market['yes_odds'], market['no_odds'], market['volume'],
         custom_prompt=custom_prompt, niche=niche
     )
-    reasoning = ai_result['reasoning'] if ai_result else "Interesting setup here."
+    if not ai_result:
+        print(f"[{agent_id}] ✗ AI analysis failed, skipping post")
+        return False
+
+    reasoning = ai_result['reasoning']
 
     tweet_text = create_tweet(agent, market, reasoning)
     print(f"[{agent_id}] Tweet:\n{tweet_text}\n")

@@ -250,16 +250,26 @@ const utils = {
         let bestNo = 0;
 
         for (const market of event.markets) {
+            // Skip resolved/closed markets
+            if (market.resolved === true || market.closed === true) continue;
+            
             const outcomes = market.outcomes || ['Yes', 'No'];
             const prices = market.outcomePrices ? JSON.parse(market.outcomePrices) : [];
 
             if (prices.length >= 2) {
                 const yesPrice = parseFloat(prices[0]);
                 const noPrice = parseFloat(prices[1]);
+                
+                // Skip extreme prices (basically resolved)
+                if (yesPrice >= 1 || yesPrice <= 0) continue;
+                
                 if (yesPrice > bestYes) bestYes = yesPrice;
                 if (noPrice > bestNo) bestNo = noPrice;
             }
         }
+
+        // If all markets are resolved/extreme, return null
+        if (bestYes === 0 && bestNo === 0) return null;
 
         return { yes: bestYes, no: bestNo };
     },

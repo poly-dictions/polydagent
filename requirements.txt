@@ -9,9 +9,10 @@ fastapi>=0.115.0
 uvicorn>=0.32.0
 solders>=0.21.0
 pydantic>=2.0.0
-irys-sdk>=0.1.9
 borsh-construct>=0.1.0
 py-clob-client>=0.34.4
-requests>=2.31.0
+requests
 web3>=6.0.0
 anthropic>=0.18.0
+dome-api-sdk
+beautifulsoup4>=4.12.0
