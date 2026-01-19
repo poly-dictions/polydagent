@@ -1,0 +1,22 @@
+{
+  "default": [
+    {
+      "address": "0x37e4728b3c4607fb2b3b205386bb1d1fb1a8c991",
+      "name": "0x37e472...a8c991",
+      "nickname": "0x37e472...a8c991",
+      "marketsCount": 153,
+      "totalVolume": 2592097.340217999,
+      "pnl": -6025160.47040167,
+      "lastActive": 1768850506
+    },
+    {
+      "address": "0x56687bf447db6ffa42ffe2204a05edaa20f55839",
+      "name": "Theo4",
+      "nickname": "Theo4",
+      "marketsCount": 7,
+      "totalVolume": 907029.2068029984,
+      "pnl": 0,
+      "lastActive": 1731489409
+    }
+  ]
+}

@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wallet tracker - polydictions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/app.css">
+    <link rel="icon" type="image/png" href="/images/1.png">
+    <style>
+
+        /* Navigation overrides */
+        .navbar {
+            background: transparent;
+            backdrop-filter: none;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Search Section */
+        .search-section {
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.15), 0 2px 8px rgba(234,88,12,0.1);
+            transition: all 0.2s ease;
+        }
+        .search-section:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18), 0 4px 12px rgba(234,88,12,0.12);
+        }
+        .search-section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-bottom: 16px;
+        }
+        .search-input-group {
+            display: flex;
+            gap: 12px;
+        }
+        .search-input {
+            flex: 1;
+            padding: 14px 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            background: #fafafa;
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #f97316;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(249,115,22,0.1);
+        }
+        .search-btn {
+            padding: 14px 28px;
+            background: #f97316;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .search-btn:hover {
+            background: #ea580c;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(249,115,22,0.3);
+        }
+        .search-results {
+            margin-top: 16px;
+            display: none;
+        }
+        .search-result-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: white;
+        }
+        .search-result-item:hover {
+            border-color: #f97316;
+            background: #fff7ed;
+            transform: translateX(4px);
+        }
+
+        /* Popular Wallets Section */
+        .popular-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        .popular-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .popular-header svg {
+            color: #f97316;
+        }
+        .popular-header h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a2e;
+            margin: 0;
+        }
+        .popular-wallets {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .popular-wallet {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+        }
+        .popular-wallet:hover {
+            background: #fff7ed;
+            border-color: #f97316;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(249,115,22,0.15);
+        }
+        .popular-wallet-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: #f97316;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            overflow: hidden;
+        }
+        .popular-wallet-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .popular-wallet-name {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .popular-wallet-address {
+            font-family: monospace;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+        .popular-wallet-pnl {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: auto;
+        }
+        .popular-wallet-pnl.green {
+            color: #22c55e;
+            background: #dcfce7;
+        }
+        .popular-wallet-pnl.red {
+            color: #ef4444;
+            background: #fee2e2;
+        }
+        .popular-loading {
+            color: #9ca3af;
+            font-size: 13px;
+            padding: 20px;
+            text-align: center;
+            width: 100%;
+        }
+        .popular-wallet.tracked {
+            background: #fff7ed;
+            border-color: #fed7aa;
+            cursor: default;
+        }
+        .popular-wallet-remove {
+            background: none;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            color: #9ca3af;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 8px;
+        }
+        .popular-wallet-remove:hover {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        /* Whale Alerts Section */
+        .whale-alerts-section {
+            background: white;
+            border-radius: 16px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+        .whale-alerts-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+        .whale-alerts-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .whale-alerts-title svg {
+            color: #f97316;
+        }
+        .whale-alerts-controls {
+            display: flex;
+            gap: 8px;
+        }
+        .whale-alert-filter {
+            padding: 6px 12px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 8px;
+            color: #f97316;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+        }
+        .whale-alert-filter:hover {
+            background: #ffedd5;
+        }
+        .whale-alert-filter.active {
+            background: #f97316;
+            border-color: #f97316;
+            color: white;
+        }
+        .whale-alerts-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .whale-alert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #fafafa;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+            border: 1px solid #f3f4f6;
+        }
+        .whale-alert-item:hover {
+            background: #f5f5f5;
+            border-color: #e5e7eb;
+        }
+        .whale-alert-item:last-child {
+            margin-bottom: 0;
+        }
+        .whale-alert-side {
+            width: 50px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .whale-alert-side.buy { color: #22c55e; }
+        .whale-alert-side.sell { color: #ef4444; }
+        .whale-alert-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .whale-alert-trader {
+            font-weight: 600;
+            color: #1a1a2e;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .whale-alert-market {
+            font-size: 12px;
+            color: #6b7280;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .whale-alert-value {
+            font-weight: 700;
+            color: #f97316;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .whale-alert-time {
+            color: #9ca3af;
+            font-size: 11px;
+            min-width: 50px;
+            text-align: right;
+        }
+        .whale-alerts-empty {
+            text-align: center;
+            color: #9ca3af;
+            padding: 30px;
+            font-size: 13px;
+        }
+        .size-slider-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .size-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 120px;
+            height: 4px;
+            background: #e5e7eb;
+            border-radius: 2px;
+            outline: none;
+            cursor: pointer;
+        }
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #f97316;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .size-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 10px rgba(249, 115, 22, 0.5);
+        }
+        .size-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #f97316;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(249, 115, 22, 0.4);
+        }
+        .size-value {
+            font-size: 12px;
+            font-weight: 600;
+            color: #f97316;
+            min-width: 50px;
+        }
+
+        /* Tracked Wallets Grid */
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tracked-wallets {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        /* Wallet Card */
+        .wallet-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .wallet-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+            border-color: #f97316;
+        }
+        .wallet-card.active {
+            border-color: #f97316;
+            box-shadow: 0 0 0 4px rgba(249,115,22,0.15);
+        }
+        .wallet-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .wallet-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            overflow: hidden;
+        }
+        .wallet-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .wallet-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .wallet-name {
+            font-weight: 600;
+            color: #1a1a2e;
+            font-size: 15px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .wallet-address {
+            font-family: monospace;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .wallet-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9ca3af;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        .wallet-remove:hover {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+        .wallet-last-active {
+            font-size: 11px;
+            color: #9ca3af;
+            background: #f3f4f6;
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-left: auto;
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+        .wallet-last-active.recent {
+            color: #22c55e;
+            background: #dcfce7;
+        }
+        .wallet-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .wallet-stat {
+            text-align: center;
+            padding: 10px 8px;
+            background: #f9fafb;
+            border-radius: 10px;
+            transition: all 0.2s ease;
+        }
+        .wallet-card:hover .wallet-stat {
+            background: #fff7ed;
+        }
+        .wallet-stat-value {
+            font-weight: 700;
+            font-size: 14px;
+            color: #1a1a2e;
+        }
+        .wallet-stat-value.green { color: #22c55e; }
+        .wallet-stat-value.red { color: #ef4444; }
+        .wallet-stat-label {
+            font-size: 10px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Add Wallet Button */
+        .add-wallet-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            height: 100%;
+            min-height: 160px;
+            background: rgba(255,255,255,0.97);
+            border: 2px solid rgba(0,0,0,0.08);
+            border-radius: 16px;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .add-wallet-btn:hover {
+            border-color: #f97316;
+            color: #f97316;
+            background: white;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(249,115,22,0.15);
+        }
+        .add-wallet-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: #f3f4f6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .add-wallet-btn:hover .add-wallet-icon {
+            background: #fff7ed;
+        }
+        .add-wallet-text {
+            text-align: center;
+        }
+        .add-wallet-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .add-wallet-subtitle {
+            font-size: 12px;
+            color: #9ca3af;
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            display: none;
+            margin-top: 24px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            color: #1a1a2e;
+        }
+        .detail-panel.active {
+            display: block;
+        }
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .detail-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+        .close-btn {
+            padding: 10px 20px;
+            background: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .close-btn:hover {
+            background: #4b5563;
+            transform: translateY(-1px);
+        }
+
+        /* Tabs */
+        .detail-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f3f4f6;
+            padding-bottom: 8px;
+        }
+        .detail-tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            color: #6b7280;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        .detail-tab:hover {
+            background: #f3f4f6;
+        }
+        .detail-tab.active {
+            background: #f97316;
+            color: white;
+        }
+
+        /* Positions Table */
+        .positions-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .positions-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 500;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .positions-table td {
+            padding: 14px 16px;
+            font-size: 14px;
+            color: #1a1a2e;
+            border-bottom: 1px solid #f5f5f5;
+            transition: background 0.2s ease;
+        }
+        .positions-table tr:hover td {
+            background: #fafafa;
+        }
+
+        /* Trade History */
+        .trade-item {
+            display: flex;
+            align-items: center;
+            padding: 14px;
+            border-bottom: 1px solid #f3f4f6;
+            transition: all 0.2s ease;
+            color: #1a1a2e;
+        }
+        .trade-item:hover {
+            background: #fafafa;
+        }
+        .trade-item:last-child {
+            border-bottom: none;
+        }
+        .trade-side {
+            width: 60px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+        .trade-side.buy { color: #22c55e; }
+        .trade-side.sell { color: #ef4444; }
+        .trade-market {
+            flex: 1;
+            min-width: 0;
+        }
+        .trade-market-title {
+            font-weight: 500;
+            color: #1a1a2e;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .trade-market-outcome {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .trade-value {
+            font-weight: 600;
+            color: #1a1a2e;
+            margin-left: 16px;
+        }
+        .trade-time {
+            color: #9ca3af;
+            font-size: 12px;
+            margin-left: 16px;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+
+        /* Footer */
+        .footer {
+            border-top: 1px solid rgba(255,255,255,0.15);
+            padding: 28px 0;
+            margin-top: 40px;
+            position: relative;
+            z-index: 1;
+        }
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .footer p {
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            margin: 0;
+        }
+        .footer-links {
+            display: flex;
+            gap: 20px;
+        }
+        .footer-link {
+            color: rgba(255,255,255,0.7);
+            text-decoration: none;
+            font-size: 13px;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .footer-link:hover {
+            color: white;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal h3 {
+            margin: 0 0 16px 0;
+            font-size: 18px;
+            color: #1a1a2e;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+        }
+        .modal-input:focus {
+            outline: none;
+            border-color: #f97316;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .modal-btn.cancel {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .modal-btn.confirm {
+            background: #f97316;
+            color: white;
+        }
+        .wallet-edit {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #9ca3af;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+        .wallet-edit:hover {
+            background: #f3f4f6;
+            color: #f97316;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .search-input-group {
+                flex-direction: column;
+            }
+            .tracked-wallets {
+                grid-template-columns: 1fr;
+            }
+            .popular-wallets {
+                flex-direction: column;
+            }
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="/" class="navbar-logo">polydictions</a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">home</a>
+            <a href="/markets/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">markets</a>
+            <a href="/alerts/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">alerts</a>
+            <a href="/whales/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">whales</a>
+            <a href="/wallet-tracker/" class="navbar-link active" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">tracker</a>
+            <a href="/arbitrage/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">arbitrage</a>
+            <a href="/launchpad/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">launchpad</a>
+            <a href="/roadmap/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">roadmap</a>
+            <a href="/research/" class="navbar-link" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">research</a>
+        </div>
+        <div class="navbar-right">
+            <a href="https://x.com/polydictions" target="_blank" class="navbar-social" onmouseover="this.style.transform='perspective(1000px) rotateX(-10deg) rotateY(8deg) translateZ(25px)';this.style.boxShadow='0 8px 30px rgba(0,0,0,0.25),0 0 40px rgba(251,101,30,0.3)'" onmouseout="this.style.transform='perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(15px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,0.15)'" onmousemove="const rect=this.getBoundingClientRect();const x=event.clientX-rect.left;const y=event.clientY-rect.top;const centerX=rect.width/2;const centerY=rect.height/2;const rotateX=((y-centerY)/centerY)*-12;const rotateY=((x-centerX)/centerX)*12;this.style.transform=`perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(25px)`">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+                @polydictions
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">wallet tracker</h1>
+            <p class="page-subtitle">track any polymarket wallet's positions and trades</p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="search-section">
+            <h2>search wallet</h2>
+            <div class="search-input-group">
+                <input type="text" class="search-input" id="walletSearch"
+                       placeholder="enter wallet address (0x...) or search by name...">
+                <button class="search-btn" onclick="searchWallet()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    search
+                </button>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+        </div>
+
+        <!-- Popular Wallets -->
+        <div class="popular-section">
+            <div class="popular-header">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <h3>top traders (by PnL)</h3>
+                <span style="font-size:11px;color:#9ca3af;margin-left:auto;font-weight:400">click to track • tracked by default</span>
+            </div>
+            <div class="popular-wallets" id="popularWallets">
+                <div class="popular-loading">loading top traders...</div>
+            </div>
+        </div>
+
+        <!-- Whale Alerts -->
+        <div class="whale-alerts-section" id="whaleAlertsSection" style="display:none;">
+            <div class="whale-alerts-header">
+                <div class="whale-alerts-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    whale alerts (tracked wallets)
+                </div>
+                <div class="whale-alerts-controls">
+                    <span style="font-size:12px;color:#6b7280;margin-right:4px">min:</span>
+                    <div class="size-slider-group">
+                        <input type="range" class="size-slider" id="whaleMinSlider" min="1" max="50" value="1" step="1">
+                        <span class="size-value" id="whaleMinValue">$1K+</span>
+                    </div>
+                </div>
+            </div>
+            <div class="whale-alerts-list" id="whaleAlertsList">
+                <div class="whale-alerts-empty">tracking whale activity...</div>
+            </div>
+        </div>
+
+        <!-- Tracked Wallets -->
+        <h2 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="4" width="20" height="16" rx="2"/>
+                <path d="M2 10h20"/>
+                <path d="M12 4v16"/>
+            </svg>
+            tracked wallets
+        </h2>
+        <div class="tracked-wallets" id="trackedWallets">
+            <button class="add-wallet-btn" onclick="document.getElementById('walletSearch').focus()">
+                <div class="add-wallet-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <path d="M2 10h20"/>
+                        <circle cx="17" cy="14" r="2"/>
+                    </svg>
+                </div>
+                <div class="add-wallet-text">
+                    <div class="add-wallet-title">add wallet to track</div>
+                    <div class="add-wallet-subtitle">track positions, P&L and trade history</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Detail Panel -->
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-header">
+                <div class="detail-title" id="detailTitle">wallet details</div>
+                <button class="close-btn" onclick="closeDetail()">close</button>
+            </div>
+
+            <div class="detail-tabs">
+                <button class="detail-tab active" data-tab="positions">positions</button>
+                <button class="detail-tab" data-tab="history">trade history</button>
+            </div>
+
+            <div id="tabContent">
+                <!-- Tab content loaded dynamically -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Name Modal -->
+    <div class="modal-overlay" id="nameModal">
+        <div class="modal">
+            <h3 id="modalTitle">name this wallet</h3>
+            <input type="text" class="modal-input" id="walletNameInput" placeholder="enter nickname...">
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeNameModal()">cancel</button>
+                <button class="modal-btn confirm" onclick="saveWalletName()">save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2026 polydictions. prediction markets intelligence.</p>
+            <div class="footer-links">
+                <a href="https://x.com/polydictions" target="_blank" class="footer-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    </svg>
+                    Twitter
+                </a>
+                <a href="/roadmap/" class="footer-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    Roadmap
+                </a>
+                <a href="/research/" class="footer-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    Research
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // API base URL
+        const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? `http://${window.location.hostname}:8765`
+            : 'https://polydictions-production.up.railway.app';
+
+        // State
+        let trackedWallets = [];
+        let selectedWallet = null;
+        let currentTab = 'positions';
+
+        // Utility functions
+        function formatCurrency(value) {
+            if (value == null || isNaN(value)) return '$0';
+            const num = parseFloat(value);
+            if (Math.abs(num) >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+            if (Math.abs(num) >= 1000) return `$${(num / 1000).toFixed(1)}K`;
+            if (Math.abs(num) >= 1) return `$${num.toFixed(0)}`;
+            return `${(num * 100).toFixed(0)}c`;
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            let ts;
+            if (typeof timestamp === 'string') {
+                ts = new Date(timestamp).getTime();
+            } else if (timestamp < 10000000000) {
+                // Unix timestamp in seconds, convert to milliseconds
+                ts = timestamp * 1000;
+            } else {
+                ts = timestamp;
+            }
+            if (isNaN(ts)) return '';
+
+            const diff = Date.now() - ts;
+            if (diff < 0) return 'now';
+
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+
+            if (seconds < 60) return `${seconds}s`;
+            if (minutes < 60) return `${minutes}m`;
+            if (hours < 24) return `${hours}h`;
+            if (days < 7) return `${days}d`;
+            return new Date(ts).toLocaleDateString();
+        }
+
+        // State for whale alerts
+        let whaleAlertMinAmount = 1000;
+        let whaleAlertsInterval = null;
+
+        // Load tracked wallets on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTrackedWallets();
+            loadTopTraders();
+            setupTabListeners();
+            setupWhaleAlertFilters();
+        });
+
+        async function loadTrackedWallets() {
+            try {
+                const response = await fetch(`${API_URL}/api/wallet-tracker/watchlist?userId=default`);
+                const data = await response.json();
+                if (data.success) {
+                    trackedWallets = data.data || [];
+                    renderTrackedWallets();
+
+                    // Show whale alerts section if we have tracked wallets
+                    if (trackedWallets.length > 0) {
+                        document.getElementById('whaleAlertsSection').style.display = 'block';
+                        loadWhaleAlerts();
+                        // Refresh whale alerts every 60 seconds
+                        if (whaleAlertsInterval) clearInterval(whaleAlertsInterval);
+                        whaleAlertsInterval = setInterval(loadWhaleAlerts, 60000);
+                    } else {
+                        document.getElementById('whaleAlertsSection').style.display = 'none';
+                    }
+
+                    // Refresh stats for all wallets in background
+                    for (const wallet of trackedWallets) {
+                        refreshWalletStats(wallet.address);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading tracked wallets:', error);
+            }
+        }
+
+        async function loadTopTraders() {
+            const container = document.getElementById('popularWallets');
+            try {
+                const response = await fetch(`${API_URL}/api/wallet-tracker/top-traders?limit=8&sort=pnl`);
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    container.innerHTML = data.data.map(trader => {
+                        const pnlClass = trader.pnl >= 0 ? 'green' : 'red';
+                        const pnlSign = trader.pnl >= 0 ? '+' : '';
+                        const isTracked = trackedWallets.some(w => w.address.toLowerCase() === trader.address.toLowerCase());
+                        return `
+                            <div class="popular-wallet ${isTracked ? 'tracked' : ''}" onclick="${isTracked ? '' : `quickTrack('${trader.address}', '${(trader.name || '').replace(/'/g, "\\'")}', '${trader.profileImage || ''}')`}">
+                                <div class="popular-wallet-avatar">
+                                    ${trader.profileImage
+                                        ? `<img src="${trader.profileImage}" alt="">`
+                                        : (trader.name ? trader.name[0].toUpperCase() : '?')}
+                                </div>
+                                <div style="flex:1;min-width:0">
+                                    <div class="popular-wallet-name">${trader.name || 'Unknown'}</div>
+                                    <div class="popular-wallet-address">${trader.address.slice(0,6)}...${trader.address.slice(-4)}</div>
+                                </div>
+                                <div class="popular-wallet-pnl ${pnlClass}">${pnlSign}${formatCurrency(trader.pnl)}</div>
+                                ${isTracked ? `
+                                    <button class="popular-wallet-remove" onclick="event.stopPropagation();removeWallet('${trader.address}')" title="Remove">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                                        </svg>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div class="popular-loading">no top traders found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading top traders:', error);
+                container.innerHTML = '<div class="popular-loading">failed to load</div>';
+            }
+        }
+
+        async function loadWhaleAlerts() {
+            if (trackedWallets.length === 0) return;
+
+            const container = document.getElementById('whaleAlertsList');
+            const addresses = trackedWallets.map(w => w.address).join(',');
+
+            try {
+                const response = await fetch(`${API_URL}/api/wallet-tracker/whale-alerts?addresses=${addresses}&min=${whaleAlertMinAmount}`);
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    container.innerHTML = data.data.map(alert => {
+                        const wallet = trackedWallets.find(w => w.address === alert.address);
+                        const traderName = wallet?.nickname || wallet?.name || alert.name || `${alert.address.slice(0,6)}...${alert.address.slice(-4)}`;
+                        return `
+                            <div class="whale-alert-item" onclick="window.open('https://polymarket.com/profile/${alert.address}', '_blank')">
+                                <div class="whale-alert-side ${alert.side}">${alert.side}</div>
+                                <div class="whale-alert-info">
+                                    <div class="whale-alert-trader">${traderName}</div>
+                                    <div class="whale-alert-market">${alert.outcome || ''} - ${alert.marketTitle || 'Unknown market'}</div>
+                                </div>
+                                <div class="whale-alert-value">${formatCurrency(alert.value)}</div>
+                                <div class="whale-alert-time">${formatTime(alert.timestamp)}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = '<div class="whale-alerts-empty">no whale trades detected (above $' + (whaleAlertMinAmount/1000) + 'K)</div>';
+                }
+            } catch (error) {
+                console.error('Error loading whale alerts:', error);
+                container.innerHTML = '<div class="whale-alerts-empty">failed to load alerts</div>';
+            }
+        }
+
+        function setupWhaleAlertFilters() {
+            const slider = document.getElementById('whaleMinSlider');
+            const valueDisplay = document.getElementById('whaleMinValue');
+
+            if (slider) {
+                slider.addEventListener('input', () => {
+                    const val = parseInt(slider.value);
+                    whaleAlertMinAmount = val * 1000;
+                    valueDisplay.textContent = `$${val}K+`;
+                });
+
+                slider.addEventListener('change', () => {
+                    loadWhaleAlerts();
+                });
+            }
+        }
+
+        function renderTrackedWallets() {
+            const container = document.getElementById('trackedWallets');
+
+            let html = trackedWallets.map(wallet => `
+                <div class="wallet-card ${selectedWallet?.address === wallet.address ? 'active' : ''}"
+                     onclick="selectWallet('${wallet.address}')">
+                    <div class="wallet-header">
+                        <div class="wallet-avatar">
+                            ${wallet.profileImage
+                                ? `<img src="${wallet.profileImage}" alt="">`
+                                : (wallet.name ? wallet.name[0].toUpperCase() : '?')}
+                        </div>
+                        <div class="wallet-info">
+                            <div class="wallet-name">${wallet.nickname || wallet.name || 'unknown'}</div>
+                            <div class="wallet-address">${wallet.address.slice(0,8)}...${wallet.address.slice(-6)}</div>
+                        </div>
+                        <span class="wallet-last-active ${wallet.lastActive && (Date.now() - wallet.lastActive) < 3600000 ? 'recent' : ''}" title="Last trade">
+                            ${wallet.lastActive ? formatTime(wallet.lastActive) : '-'}
+                        </span>
+                        <button class="wallet-edit" onclick="event.stopPropagation();openPolymarketProfile('${wallet.address}')" title="Open Polymarket">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                <polyline points="15 3 21 3 21 9"/>
+                                <line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </button>
+                        <button class="wallet-edit" onclick="event.stopPropagation();openEditModal('${wallet.address}')" title="Edit name">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                        </button>
+                        <button class="wallet-remove" onclick="event.stopPropagation();removeWallet('${wallet.address}')" title="Remove">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="wallet-stats">
+                        <div class="wallet-stat">
+                            <div class="wallet-stat-value">${wallet.marketsCount || 0}</div>
+                            <div class="wallet-stat-label">markets</div>
+                        </div>
+                        <div class="wallet-stat">
+                            <div class="wallet-stat-value">${formatCurrency(wallet.totalVolume || 0)}</div>
+                            <div class="wallet-stat-label">volume</div>
+                        </div>
+                        <div class="wallet-stat" title="Unrealized PnL from open positions">
+                            <div class="wallet-stat-value ${(wallet.pnl || 0) >= 0 ? 'green' : 'red'}">
+                                ${(wallet.pnl || 0) >= 0 ? '+' : ''}${formatCurrency(wallet.pnl || 0)}
+                            </div>
+                            <div class="wallet-stat-label">open pnl</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add button
+            html += `
+                <button class="add-wallet-btn" onclick="document.getElementById('walletSearch').focus()">
+                    <div class="add-wallet-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                            <rect x="2" y="4" width="20" height="16" rx="2"/>
+                            <path d="M2 10h20"/>
+                            <circle cx="17" cy="14" r="2"/>
+                        </svg>
+                    </div>
+                    <div class="add-wallet-text">
+                        <div class="add-wallet-title">add wallet to track</div>
+                        <div class="add-wallet-subtitle">track positions, P&L and trade history</div>
+                    </div>
+                </button>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        async function searchWallet() {
+            const query = document.getElementById('walletSearch').value.trim();
+            if (!query || query.length < 3) return;
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading">searching...</div>';
+
+            try {
+                const response = await fetch(`${API_URL}/api/wallet-tracker/search?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+
+                if (data.success && data.data.length > 0) {
+                    resultsDiv.innerHTML = data.data.map(result => {
+                        const hasPnl = result.pnl !== undefined && result.pnl !== null;
+                        const pnlClass = hasPnl && result.pnl >= 0 ? 'green' : 'red';
+                        const pnlSign = hasPnl && result.pnl >= 0 ? '+' : '';
+                        return `
+                        <div class="search-result-item" onclick="addWalletFromSearch('${result.address}', '${(result.name || '').replace(/'/g, "\\'")}', '${result.profileImage || ''}')">
+                            <div class="wallet-avatar" style="width:40px;height:40px;margin-right:12px;font-size:14px">
+                                ${result.profileImage
+                                    ? `<img src="${result.profileImage}" alt="">`
+                                    : (result.name ? result.name[0].toUpperCase() : '?')}
+                            </div>
+                            <div style="flex:1">
+                                <div style="font-weight:600;color:#1a1a2e">${result.name || 'unknown'}</div>
+                                <div style="font-family:monospace;font-size:12px;color:#6b7280">${result.address}</div>
+                            </div>
+                            ${hasPnl ? `<div style="font-size:12px;font-weight:600;color:${result.pnl >= 0 ? '#22c55e' : '#ef4444'};margin-right:12px">${pnlSign}${formatCurrency(result.pnl)}</div>` : ''}
+                            <div style="color:#f97316;font-weight:600;padding:8px 16px;background:#fff7ed;border-radius:8px">+ track</div>
+                        </div>
+                    `}).join('');
+                } else {
+                    resultsDiv.innerHTML = '<div class="empty-state">no wallets found</div>';
+                }
+            } catch (error) {
+                console.error('Search error:', error);
+                resultsDiv.innerHTML = '<div class="empty-state" style="color:#ef4444">search failed</div>';
+            }
+        }
+
+        async function quickTrack(address, name, profileImage) {
+            await addWalletFromSearch(address, name, profileImage || '');
+        }
+
+        async function addWalletFromSearch(address, name, profileImage) {
+            // Check if already tracked
+            if (trackedWallets.some(w => w.address.toLowerCase() === address.toLowerCase())) {
+                alert('Wallet already tracked!');
+                return;
+            }
+
+            // Fetch profile data and positions in parallel
+            try {
+                const [profileRes, positionsRes, historyRes] = await Promise.all([
+                    fetch(`${API_URL}/api/wallet-tracker/profile/${address}`).catch(() => ({ json: () => ({}) })),
+                    fetch(`${API_URL}/api/wallet-tracker/positions/${address}`),
+                    fetch(`${API_URL}/api/wallet-tracker/history/${address}?limit=500`)
+                ]);
+
+                const profileData = await profileRes.json();
+                const positionsData = await positionsRes.json();
+                const historyData = await historyRes.json();
+
+                // Calculate stats from positions
+                let totalPnl = 0;
+                let totalVolume = 0;
+
+                if (positionsData.success && positionsData.data) {
+                    positionsData.data.forEach(pos => {
+                        totalPnl += parseFloat(pos.unrealizedPnl) || 0;
+                        totalVolume += (parseFloat(pos.size) * parseFloat(pos.avgPrice)) || 0;
+                    });
+                }
+
+                // Count unique markets (predictions) from positions
+                const uniqueMarkets = new Set();
+                if (positionsData.success && positionsData.data) {
+                    positionsData.data.forEach(pos => {
+                        if (pos.conditionId) uniqueMarkets.add(pos.conditionId);
+                    });
+                }
+                // Also count from history for closed positions
+                if (historyData.success && historyData.data) {
+                    historyData.data.forEach(trade => {
+                        if (trade.conditionId) uniqueMarkets.add(trade.conditionId);
+                        else if (trade.marketSlug) uniqueMarkets.add(trade.marketSlug);
+                    });
+                }
+                const marketsCount = uniqueMarkets.size || positionsData.data?.length || 0;
+
+                // Get last active time from most recent trade
+                let lastActive = null;
+                if (historyData.success && historyData.data && historyData.data.length > 0) {
+                    const lastTrade = historyData.data[0];
+                    lastActive = lastTrade.timestamp ? new Date(lastTrade.timestamp).getTime() :
+                                 lastTrade.createdAt ? new Date(lastTrade.createdAt).getTime() : null;
+                }
+
+                const wallet = {
+                    address: address.toLowerCase(),
+                    name: name || profileData.data?.name || 'Unknown',
+                    nickname: '',
+                    profileImage: profileImage || profileData.data?.profileImage,
+                    marketsCount: marketsCount,
+                    totalVolume: totalVolume,
+                    pnl: totalPnl,
+                    lastActive: lastActive,
+                };
+
+                // Open modal to let user name the wallet
+                openNameModal(wallet);
+
+            } catch (error) {
+                console.error('Error adding wallet:', error);
+            }
+        }
+
+        async function removeWallet(address) {
+            if (!confirm('Remove this wallet from tracking?')) return;
+
+            trackedWallets = trackedWallets.filter(w => w.address !== address);
+            await saveTrackedWallets();
+            renderTrackedWallets();
+            loadTopTraders(); // Refresh top traders to update tracked state
+
+            if (selectedWallet?.address === address) {
+                closeDetail();
+            }
+
+            // Hide whale alerts if no wallets tracked
+            if (trackedWallets.length === 0) {
+                document.getElementById('whaleAlertsSection').style.display = 'none';
+            }
+        }
+
+        async function saveTrackedWallets() {
+            try {
+                await fetch(`${API_URL}/api/wallet-tracker/watchlist`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: 'default', wallets: trackedWallets })
+                });
+            } catch (error) {
+                console.error('Error saving wallets:', error);
+            }
+        }
+
+        async function selectWallet(address) {
+            selectedWallet = trackedWallets.find(w => w.address === address);
+            renderTrackedWallets();
+
+            document.getElementById('detailPanel').classList.add('active');
+            document.getElementById('detailTitle').textContent = selectedWallet.name || selectedWallet.address;
+
+            // Refresh stats from positions
+            await refreshWalletStats(address);
+
+            await loadTabContent();
+        }
+
+        async function refreshWalletStats(address) {
+            try {
+                // Fetch profile, positions and history in parallel
+                const [profileRes, positionsRes, historyRes] = await Promise.all([
+                    fetch(`${API_URL}/api/wallet-tracker/profile/${address}`).catch(() => ({ json: () => ({}) })),
+                    fetch(`${API_URL}/api/wallet-tracker/positions/${address}`),
+                    fetch(`${API_URL}/api/wallet-tracker/history/${address}?limit=500`)
+                ]);
+
+                const profileData = await profileRes.json();
+                const positionsData = await positionsRes.json();
+                const historyData = await historyRes.json();
+
+                // Calculate unrealized PnL from open positions
+                let unrealizedPnl = 0;
+                if (positionsData.success && positionsData.data) {
+                    positionsData.data.forEach(pos => {
+                        unrealizedPnl += parseFloat(pos.unrealizedPnl) || 0;
+                    });
+                }
+
+                // Get total volume from profile (official Polymarket data) or calculate from history
+                let totalVolume = 0;
+                if (profileData.success && profileData.data?.totalVolume) {
+                    totalVolume = parseFloat(profileData.data.totalVolume) || 0;
+                } else if (historyData.success && historyData.data) {
+                    historyData.data.forEach(trade => {
+                        totalVolume += parseFloat(trade.value) || 0;
+                    });
+                }
+
+                // Count unique markets from positions and history
+                const uniqueMarkets = new Set();
+                if (positionsData.success && positionsData.data) {
+                    positionsData.data.forEach(pos => {
+                        if (pos.conditionId) uniqueMarkets.add(pos.conditionId);
+                    });
+                }
+                if (historyData.success && historyData.data) {
+                    historyData.data.forEach(trade => {
+                        if (trade.conditionId) uniqueMarkets.add(trade.conditionId);
+                        else if (trade.marketSlug) uniqueMarkets.add(trade.marketSlug);
+                    });
+                }
+                const marketsCount = uniqueMarkets.size || positionsData.data?.length || 0;
+
+                // Get last active time from most recent trade
+                let lastActive = null;
+                if (historyData.success && historyData.data && historyData.data.length > 0) {
+                    const lastTrade = historyData.data[0];
+                    lastActive = lastTrade.timestamp ? new Date(lastTrade.timestamp).getTime() :
+                                 lastTrade.createdAt ? new Date(lastTrade.createdAt).getTime() : null;
+                }
+
+                // Update wallet in array
+                const wallet = trackedWallets.find(w => w.address === address);
+                if (wallet) {
+                    wallet.pnl = unrealizedPnl;
+                    wallet.totalVolume = totalVolume;
+                    wallet.marketsCount = marketsCount;
+                    wallet.lastActive = lastActive;
+                    // Update profile image if available
+                    if (profileData.success && profileData.data?.profileImage) {
+                        wallet.profileImage = profileData.data.profileImage;
+                    }
+                    await saveTrackedWallets();
+                    renderTrackedWallets();
+                }
+            } catch (error) {
+                console.error('Error refreshing wallet stats:', error);
+            }
+        }
+
+        function closeDetail() {
+            selectedWallet = null;
+            document.getElementById('detailPanel').classList.remove('active');
+            renderTrackedWallets();
+        }
+
+        function openPolymarketProfile(address) {
+            window.open(`https://polymarket.com/profile/${address}`, '_blank');
+        }
+
+        // Modal state
+        let pendingWalletData = null;
+        let editingWalletAddress = null;
+
+        function openNameModal(walletData) {
+            pendingWalletData = walletData;
+            editingWalletAddress = null;
+            document.getElementById('modalTitle').textContent = 'name this wallet';
+            document.getElementById('walletNameInput').value = walletData.name || '';
+            document.getElementById('walletNameInput').placeholder = 'enter nickname (optional)...';
+            document.getElementById('nameModal').classList.add('active');
+            document.getElementById('walletNameInput').focus();
+        }
+
+        function openEditModal(address) {
+            const wallet = trackedWallets.find(w => w.address === address);
+            if (!wallet) return;
+
+            pendingWalletData = null;
+            editingWalletAddress = address;
+            document.getElementById('modalTitle').textContent = 'rename wallet';
+            document.getElementById('walletNameInput').value = wallet.nickname || wallet.name || '';
+            document.getElementById('nameModal').classList.add('active');
+            document.getElementById('walletNameInput').focus();
+        }
+
+        function closeNameModal() {
+            document.getElementById('nameModal').classList.remove('active');
+            pendingWalletData = null;
+            editingWalletAddress = null;
+        }
+
+        async function saveWalletName() {
+            const name = document.getElementById('walletNameInput').value.trim();
+
+            if (editingWalletAddress) {
+                // Editing existing wallet
+                const wallet = trackedWallets.find(w => w.address === editingWalletAddress);
+                if (wallet) {
+                    wallet.nickname = name || wallet.name;
+                    await saveTrackedWallets();
+                    renderTrackedWallets();
+                    loadTopTraders(); // Refresh top traders
+                }
+            } else if (pendingWalletData) {
+                // Adding new wallet
+                pendingWalletData.nickname = name || pendingWalletData.name;
+                trackedWallets.push(pendingWalletData);
+                await saveTrackedWallets();
+                renderTrackedWallets();
+                loadTopTraders(); // Refresh top traders to show tracked state
+
+                // Show whale alerts section
+                document.getElementById('whaleAlertsSection').style.display = 'block';
+                loadWhaleAlerts();
+
+                // Clear search
+                document.getElementById('walletSearch').value = '';
+                document.getElementById('searchResults').style.display = 'none';
+            }
+
+            closeNameModal();
+        }
+
+        // Close modal on Escape or Enter
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('nameModal').classList.contains('active')) {
+                if (e.key === 'Escape') closeNameModal();
+                if (e.key === 'Enter') saveWalletName();
+            }
+        });
+
+        function setupTabListeners() {
+            document.querySelectorAll('.detail-tab').forEach(tab => {
+                tab.addEventListener('click', async () => {
+                    document.querySelectorAll('.detail-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentTab = tab.dataset.tab;
+                    await loadTabContent();
+                });
+            });
+        }
+
+        async function loadTabContent() {
+            if (!selectedWallet) return;
+
+            const container = document.getElementById('tabContent');
+            container.innerHTML = '<div class="loading">Loading...</div>';
+
+            try {
+                if (currentTab === 'positions') {
+                    const response = await fetch(`${API_URL}/api/wallet-tracker/positions/${selectedWallet.address}`);
+                    const data = await response.json();
+
+                    if (data.success && data.data.length > 0) {
+                        container.innerHTML = `
+                            <div style="overflow-x:auto">
+                            <table class="positions-table">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width:200px">Market</th>
+                                        <th style="min-width:80px">Outcome</th>
+                                        <th style="min-width:80px">Size</th>
+                                        <th style="min-width:80px">Avg Price</th>
+                                        <th style="min-width:80px">Current</th>
+                                        <th style="min-width:80px">PnL</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.data.map(pos => {
+                                        const market = pos.marketTitle || pos.title || pos.question || 'Unknown Market';
+                                        const outcome = pos.outcome || pos.asset || '-';
+                                        const size = parseFloat(pos.size) || 0;
+                                        const avgPrice = parseFloat(pos.avgPrice) || 0;
+                                        const currentPrice = parseFloat(pos.currentPrice) || 0;
+                                        const pnl = parseFloat(pos.unrealizedPnl) || 0;
+                                        const slug = pos.eventSlug || pos.marketSlug || '';
+
+                                        return `
+                                        <tr onclick="window.open('https://polymarket.com/event/${slug}', '_blank')" style="cursor:pointer">
+                                            <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis"
+                                                title="${market}">${market}</td>
+                                            <td><span style="background:${outcome === 'Yes' ? '#dcfce7' : outcome === 'No' ? '#fee2e2' : '#f3f4f6'};color:${outcome === 'Yes' ? '#16a34a' : outcome === 'No' ? '#dc2626' : '#374151'};padding:4px 8px;border-radius:6px;font-weight:500">${outcome}</span></td>
+                                            <td style="font-weight:500">${formatCurrency(size)}</td>
+                                            <td>${(avgPrice * 100).toFixed(1)}c</td>
+                                            <td>${(currentPrice * 100).toFixed(1)}c</td>
+                                            <td style="color:${pnl >= 0 ? '#22c55e' : '#ef4444'};font-weight:600">
+                                                ${pnl >= 0 ? '+' : ''}${formatCurrency(pnl)}
+                                            </td>
+                                        </tr>
+                                    `}).join('')}
+                                </tbody>
+                            </table>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = '<div class="empty-state">No open positions</div>';
+                    }
+
+                } else if (currentTab === 'history') {
+                    const response = await fetch(`${API_URL}/api/wallet-tracker/history/${selectedWallet.address}?limit=50`);
+                    const data = await response.json();
+
+                    if (data.success && data.data.length > 0) {
+                        container.innerHTML = data.data.map(trade => `
+                            <div class="trade-item">
+                                <div class="trade-side ${trade.side}">${(trade.side || '').toUpperCase()}</div>
+                                <div class="trade-market">
+                                    <div class="trade-market-title">${trade.marketTitle || 'Unknown'}</div>
+                                    <div class="trade-market-outcome">${trade.outcome || ''}</div>
+                                </div>
+                                <div class="trade-value">${formatCurrency(trade.value)}</div>
+                                <div class="trade-time">${formatTime(trade.timestamp)}</div>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = '<div class="empty-state">No trade history</div>';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading tab content:', error);
+                container.innerHTML = '<div class="empty-state" style="color:#ef4444">Error loading data</div>';
+            }
+        }
+
+        // Enter key to search
+        document.getElementById('walletSearch').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') searchWallet();
+        });
+    </script>
+</body>
+</html>

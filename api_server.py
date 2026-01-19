@@ -195,6 +195,12 @@ AGENTS_FILE = DATA_DIR / "agents.json"
 ANSWERED_MENTIONS_FILE = DATA_DIR / "agent_answered_mentions.json"
 AGENT_POSTED_EVENTS_FILE = DATA_DIR / "agent_posted_events.json"
 VANITY_KEYPAIRS_FILE = DATA_DIR / "vanity_keypairs.json"
+TRACKED_WALLETS_FILE = DATA_DIR / "tracked_wallets.json"
+
+# Wallet Tracker Caches
+wallet_profile_cache = TTLCache(ttl_seconds=300, max_size=1000)   # 5 min - profiles rarely change
+wallet_positions_cache = TTLCache(ttl_seconds=60, max_size=500)   # 1 min - positions change often
+wallet_history_cache = TTLCache(ttl_seconds=120, max_size=500)    # 2 min - recent activity
 
 # Global stores for launchpad
 pending_launches: Dict[str, Dict[str, Any]] = {}
@@ -824,6 +830,11 @@ class AIAnalyzer:
             odds_desc = f"Current odds: YES {yes_odds:.0f}% / NO {no_odds:.0f}%"
             signal_instruction = '"signal": "yes" or "no"'
 
+        # Build facts section
+        facts_section = ""
+        if facts:
+            facts_section = "LATEST INTEL:\n" + str(facts)[:2000]
+
         prompt = f"""You are a sharp prediction market analyst who makes bold, specific calls based on data.
 
 Today: {current_date}
@@ -832,7 +843,7 @@ Market: {title}
 {odds_desc}
 Volume: ${volume:,.0f}
 
-{f'LATEST INTEL:\n{str(facts)[:2000]}' if facts else ''}
+{facts_section}
 
 ANALYSIS GUIDELINES:
 - Make a CLEAR directional call, not wishy-washy
@@ -853,8 +864,9 @@ Return ONLY valid JSON:
 
 BAD reasons: "market trends suggest", "momentum building", "odds favor outcome"
 GOOD reasons: "Trump leads RCP avg by 3.2pts", "Fed signaled March cut", "deadline is Feb 15"
-
-{f'Personality/style: {custom_prompt}' if custom_prompt else ''}"""
+"""
+        if custom_prompt:
+            prompt += f"\nPersonality/style: {custom_prompt}"
 
         if not OPENROUTER_API_KEY:
             logger.warning("OPENROUTER_API_KEY not set, cannot analyze market")
@@ -2213,7 +2225,7 @@ quantish_client = QuantishClient()
 
 
 class APIServer:
-    def __init__(self, host: str = "0.0.0.0", port: int = None):
+    def __init__(self, host: str = "127.0.0.1", port: int = None):
         import os
         self.host = host
         self.port = port or int(os.environ.get("PORT", 8765))
@@ -3054,6 +3066,16 @@ class APIServer:
         self.app.router.add_post("/api/projects/confirm/{launch_id}", self.projects_confirm)
         self.app.router.add_get("/api/projects/list", self.projects_list)
 
+        # Wallet Tracker API
+        self.app.router.add_get("/api/wallet-tracker/profile/{address}", self.wallet_tracker_profile)
+        self.app.router.add_get("/api/wallet-tracker/positions/{address}", self.wallet_tracker_positions)
+        self.app.router.add_get("/api/wallet-tracker/history/{address}", self.wallet_tracker_history)
+        self.app.router.add_get("/api/wallet-tracker/search", self.wallet_tracker_search)
+        self.app.router.add_get("/api/wallet-tracker/watchlist", self.wallet_tracker_watchlist)
+        self.app.router.add_post("/api/wallet-tracker/watchlist", self.wallet_tracker_watchlist_update)
+        self.app.router.add_get("/api/wallet-tracker/whale-alerts", self.wallet_tracker_whale_alerts)
+        self.app.router.add_get("/api/wallet-tracker/top-traders", self.wallet_tracker_top_traders)
+
         # Dev test endpoint (0.02 SOL fee)
         self.app.router.add_post("/api/devtest/deploy", self.devtest_deploy)
 
@@ -3082,6 +3104,8 @@ class APIServer:
             self.app.router.add_get('/research/', lambda r: web.FileResponse(static_dir / 'research' / 'index.html'))
             self.app.router.add_get('/pnp', lambda r: web.FileResponse(static_dir / 'pnp' / 'index.html'))
             self.app.router.add_get('/pnp/', lambda r: web.FileResponse(static_dir / 'pnp' / 'index.html'))
+            self.app.router.add_get('/wallet-tracker', lambda r: web.FileResponse(static_dir / 'wallet-tracker' / 'index.html'))
+            self.app.router.add_get('/wallet-tracker/', lambda r: web.FileResponse(static_dir / 'wallet-tracker' / 'index.html'))
 
             # Static assets
             self.app.router.add_static('/css', static_dir / 'css')
@@ -7334,6 +7358,376 @@ If no relevant markets found, explain what you know from research and suggest re
         except Exception as e:
             logger.error(f"Projects list error: {e}")
             return web.json_response({"projects": []})
+
+    # =============================================================================
+    # WALLET TRACKER API
+    # =============================================================================
+
+    async def wallet_tracker_profile(self, request):
+        """Get Polymarket user profile by wallet address"""
+        address = request.match_info.get('address', '').lower()
+
+        if not address or not address.startswith('0x'):
+            return web.json_response({"success": False, "error": "Invalid address"}, status=400)
+
+        # Check cache
+        cached = wallet_profile_cache.get(address)
+        if cached:
+            return web.json_response({"success": True, "data": cached, "cached": True})
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Fetch from Gamma API
+                url = f"https://gamma-api.polymarket.com/users/{address}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        profile = await resp.json()
+
+                        # Also fetch activity count from data-api
+                        activity_url = f"https://data-api.polymarket.com/activity?user={address}&limit=100"
+                        trade_count = 0
+                        try:
+                            async with session.get(activity_url, timeout=aiohttp.ClientTimeout(total=10)) as act_resp:
+                                if act_resp.status == 200:
+                                    activities = await act_resp.json()
+                                    trade_count = sum(1 for a in activities if a.get('type') == 'TRADE')
+                        except:
+                            pass
+
+                        result = {
+                            "address": address,
+                            "name": profile.get("name") or profile.get("pseudonym"),
+                            "profileImage": profile.get("profileImageOptimized") or profile.get("profileImage"),
+                            "bio": profile.get("bio"),
+                            "twitter": profile.get("twitterHandle"),
+                            "createdAt": profile.get("createdAt"),
+                            "tradeCount": trade_count,
+                            "totalVolume": profile.get("totalVolume", 0),
+                            "pnl": profile.get("pnl", 0),
+                            "rank": profile.get("rank"),
+                        }
+
+                        wallet_profile_cache.set(address, result)
+                        return web.json_response({"success": True, "data": result})
+                    elif resp.status == 404:
+                        return web.json_response({"success": False, "error": "Wallet not found"}, status=404)
+                    else:
+                        return web.json_response({"success": False, "error": f"API error: {resp.status}"}, status=resp.status)
+
+        except Exception as e:
+            logger.error(f"Wallet tracker profile error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_positions(self, request):
+        """Get current positions for a wallet"""
+        address = request.match_info.get('address', '').lower()
+
+        if not address or not address.startswith('0x'):
+            return web.json_response({"success": False, "error": "Invalid address"}, status=400)
+
+        cached = wallet_positions_cache.get(address)
+        if cached:
+            return web.json_response({"success": True, "data": cached, "cached": True})
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Fetch positions from data-api
+                url = f"https://data-api.polymarket.com/positions?user={address}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        positions_raw = await resp.json()
+
+                        positions = []
+                        for pos in positions_raw:
+                            # Calculate unrealized PnL
+                            size = float(pos.get('size', 0))
+                            avg_price = float(pos.get('avgPrice', 0))
+                            current_price = float(pos.get('curPrice', pos.get('currentPrice', 0)))
+                            cost_basis = size * avg_price
+                            current_value = size * current_price
+                            unrealized_pnl = current_value - cost_basis
+
+                            positions.append({
+                                "conditionId": pos.get('conditionId') or pos.get('condition_id'),
+                                "outcome": pos.get("outcome", pos.get("title", "Unknown")),
+                                "size": size,
+                                "avgPrice": avg_price,
+                                "currentPrice": current_price,
+                                "unrealizedPnl": unrealized_pnl,
+                                "marketTitle": pos.get("title") or pos.get("question") or pos.get("marketTitle"),
+                                "marketSlug": pos.get("slug") or pos.get("marketSlug"),
+                                "eventSlug": pos.get("eventSlug"),
+                                "endDate": pos.get("endDate"),
+                                "asset": pos.get("asset"),
+                            })
+
+                        wallet_positions_cache.set(address, positions)
+                        return web.json_response({"success": True, "data": positions})
+                    else:
+                        return web.json_response({"success": False, "error": f"API error: {resp.status}"}, status=resp.status)
+
+        except Exception as e:
+            logger.error(f"Wallet tracker positions error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_history(self, request):
+        """Get trade history for a wallet"""
+        address = request.match_info.get('address', '').lower()
+        limit = int(request.query.get('limit', '50'))
+        offset = int(request.query.get('offset', '0'))
+
+        if not address or not address.startswith('0x'):
+            return web.json_response({"success": False, "error": "Invalid address"}, status=400)
+
+        cache_key = f"{address}:{limit}:{offset}"
+        cached = wallet_history_cache.get(cache_key)
+        if cached:
+            return web.json_response({"success": True, "data": cached, "cached": True})
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"https://data-api.polymarket.com/activity?user={address}&limit={limit}&offset={offset}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        activities = await resp.json()
+
+                        # Transform to standardized format
+                        history = []
+                        for act in activities:
+                            if act.get('type') == 'TRADE':
+                                size = float(act.get('size', 0))
+                                price = float(act.get('price', 0))
+                                history.append({
+                                    "id": act.get("transactionHash") or act.get("id"),
+                                    "type": "trade",
+                                    "side": act.get("side", "").lower(),
+                                    "outcome": act.get("outcome") or act.get("title"),
+                                    "size": size,
+                                    "price": price,
+                                    "value": size * price,
+                                    "marketTitle": act.get("title") or act.get("question"),
+                                    "marketSlug": act.get("slug"),
+                                    "eventSlug": act.get("eventSlug"),
+                                    "timestamp": act.get("timestamp"),
+                                })
+
+                        wallet_history_cache.set(cache_key, history)
+                        return web.json_response({"success": True, "data": history, "total": len(activities)})
+                    else:
+                        return web.json_response({"success": False, "error": f"API error: {resp.status}"}, status=resp.status)
+
+        except Exception as e:
+            logger.error(f"Wallet tracker history error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_search(self, request):
+        """Search for wallets by address or name"""
+        query = request.query.get('q', '').strip()
+
+        if not query or len(query) < 3:
+            return web.json_response({"success": False, "error": "Query too short (min 3 chars)"}, status=400)
+
+        try:
+            # If it looks like a valid Ethereum address (42 chars), fetch profile
+            if query.startswith('0x') and len(query) == 42:
+                address = query.lower()
+                # Try to get profile info
+                async with aiohttp.ClientSession() as session:
+                    try:
+                        url = f"https://gamma-api.polymarket.com/users/{address}"
+                        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                            if resp.status == 200:
+                                profile = await resp.json()
+                                return web.json_response({"success": True, "data": [{
+                                    "address": address,
+                                    "name": profile.get("name") or profile.get("pseudonym") or f"{address[:8]}...{address[-6:]}",
+                                    "profileImage": profile.get("profileImageOptimized") or profile.get("profileImage"),
+                                }]})
+                    except:
+                        pass
+                return web.json_response({"success": True, "data": [{
+                    "address": address,
+                    "name": f"{address[:8]}...{address[-6:]}",
+                    "profileImage": None,
+                }]})
+
+            # For partial addresses (0x + at least 8 chars)
+            if query.startswith('0x') and len(query) >= 10:
+                return web.json_response({"success": True, "data": [{
+                    "address": query.lower(),
+                    "name": query.lower(),
+                    "profileImage": None,
+                }]})
+
+            # Search by name using Polymarket leaderboard API
+            async with aiohttp.ClientSession() as session:
+                # Search in leaderboard data
+                url = "https://gamma-api.polymarket.com/leaderboard?limit=500&window=all"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        leaderboard = await resp.json()
+                        query_lower = query.lower()
+                        results = []
+
+                        for user in leaderboard:
+                            name = user.get("name") or user.get("pseudonym") or ""
+                            address = user.get("userAddress") or user.get("address") or ""
+
+                            # Match by name (case insensitive)
+                            if name and query_lower in name.lower():
+                                results.append({
+                                    "address": address.lower(),
+                                    "name": name,
+                                    "profileImage": user.get("profileImageOptimized") or user.get("profileImage"),
+                                    "pnl": user.get("pnl", 0),
+                                    "volume": user.get("volume", 0),
+                                })
+
+                        # Sort by relevance (exact match first, then by PnL)
+                        results.sort(key=lambda x: (
+                            0 if x["name"].lower() == query_lower else 1,
+                            -abs(x.get("pnl", 0))
+                        ))
+
+                        return web.json_response({"success": True, "data": results[:20]})
+
+            return web.json_response({"success": True, "data": []})
+
+        except Exception as e:
+            logger.error(f"Wallet tracker search error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_watchlist(self, request):
+        """Get user's tracked wallets"""
+        user_id = request.query.get('userId', 'default')
+
+        try:
+            if TRACKED_WALLETS_FILE.exists():
+                with open(TRACKED_WALLETS_FILE, 'r') as f:
+                    all_watchlists = json.load(f)
+            else:
+                all_watchlists = {}
+
+            watchlist = all_watchlists.get(user_id, [])
+            return web.json_response({"success": True, "data": watchlist})
+
+        except Exception as e:
+            logger.error(f"Wallet tracker watchlist error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_watchlist_update(self, request):
+        """Update user's tracked wallets"""
+        try:
+            data = await request.json()
+            user_id = data.get('userId', 'default')
+            wallets = data.get('wallets', [])  # List of {address, nickname, ...}
+
+            if TRACKED_WALLETS_FILE.exists():
+                with open(TRACKED_WALLETS_FILE, 'r') as f:
+                    all_watchlists = json.load(f)
+            else:
+                all_watchlists = {}
+
+            all_watchlists[user_id] = wallets
+
+            with open(TRACKED_WALLETS_FILE, 'w') as f:
+                json.dump(all_watchlists, f, indent=2)
+
+            return web.json_response({"success": True})
+
+        except Exception as e:
+            logger.error(f"Wallet tracker watchlist update error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_whale_alerts(self, request):
+        """Get whale alerts for tracked wallets"""
+        addresses = request.query.get('addresses', '').split(',')
+        min_amount = float(request.query.get('min', '5000'))
+
+        addresses = [a.strip().lower() for a in addresses if a.strip()]
+
+        if not addresses:
+            return web.json_response({"success": False, "error": "No addresses provided"}, status=400)
+
+        try:
+            alerts = []
+            async with aiohttp.ClientSession() as session:
+                for address in addresses[:10]:  # Limit to 10 addresses per request
+                    url = f"https://data-api.polymarket.com/activity?user={address}&limit=20"
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            activities = await resp.json()
+                            for act in activities:
+                                if act.get('type') == 'TRADE':
+                                    value = float(act.get('size', 0)) * float(act.get('price', 0))
+                                    if value >= min_amount:
+                                        alerts.append({
+                                            "address": address,
+                                            "name": act.get("name") or act.get("pseudonym"),
+                                            "side": act.get("side", "").lower(),
+                                            "outcome": act.get("outcome") or act.get("title"),
+                                            "value": value,
+                                            "marketTitle": act.get("title") or act.get("question"),
+                                            "timestamp": act.get("timestamp"),
+                                        })
+
+                    await asyncio.sleep(0.1)  # Rate limiting
+
+            # Sort by timestamp descending
+            alerts.sort(key=lambda x: x.get('timestamp', 0) or 0, reverse=True)
+
+            return web.json_response({"success": True, "data": alerts[:50]})
+
+        except Exception as e:
+            logger.error(f"Wallet tracker whale alerts error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
+    async def wallet_tracker_top_traders(self, request):
+        """Get top traders from Polymarket leaderboard"""
+        window = request.query.get('window', 'all')  # all, 1d, 7d, 30d
+        limit = min(int(request.query.get('limit', '10')), 100)
+        sort_by = request.query.get('sort', 'pnl')  # pnl, volume
+
+        cache_key = f"top_traders:{window}:{limit}:{sort_by}"
+        cached = getattr(self, '_top_traders_cache', {}).get(cache_key)
+        if cached and cached.get('timestamp', 0) > time.time() - 300:  # 5 min cache
+            return web.json_response({"success": True, "data": cached['data'], "cached": True})
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Use correct Polymarket leaderboard API
+                metric = "volume" if sort_by == "volume" else "profit"
+                url = f"https://lb-api.polymarket.com/{metric}?window={window}&limit={limit}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status == 200:
+                        leaderboard = await resp.json()
+
+                        traders = []
+                        for i, user in enumerate(leaderboard):
+                            address = user.get("proxyWallet") or ""
+                            if not address:
+                                continue
+
+                            traders.append({
+                                "address": address.lower(),
+                                "name": user.get("name") or user.get("pseudonym") or f"{address[:8]}...{address[-6:]}",
+                                "profileImage": user.get("profileImageOptimized") or user.get("profileImage") or "",
+                                "pnl": float(user.get("amount", 0)),
+                                "rank": i + 1,
+                            })
+
+                        # Cache result
+                        if not hasattr(self, '_top_traders_cache'):
+                            self._top_traders_cache = {}
+                        self._top_traders_cache[cache_key] = {'data': traders, 'timestamp': time.time()}
+
+                        return web.json_response({"success": True, "data": traders})
+                    else:
+                        return web.json_response({"success": False, "error": f"API error: {resp.status}"}, status=resp.status)
+
+        except Exception as e:
+            logger.error(f"Wallet tracker top traders error: {e}")
+            return web.json_response({"success": False, "error": str(e)}, status=500)
 
     async def start(self):
         runner = web.AppRunner(self.app)
